@@ -397,7 +397,16 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildResultCard(Map<String, dynamic> result, int index) {
-    final similarity = result['similarity_score'] ?? 0.0;
+    print('Result data: $result');
+    print('Score field: ${result['score']}');
+    print('Score type: ${result['score'].runtimeType}');
+
+    final similarity = (result['score'] is String)
+        ? double.tryParse(result['score']) ?? 0.0
+        : result['score']?.toDouble() ?? 0.0;
+
+    print('Similarity after conversion: $similarity');
+
     final relevanceColor = _getRelevanceColor(similarity);
 
     return Card(
