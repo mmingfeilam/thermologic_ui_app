@@ -458,8 +458,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
                 SizedBox(width: 8),
                 OutlinedButton.icon(
-                  onPressed: () =>
-                      _deleteDocument(doc['id'], doc['filename']),
+                  onPressed: () => _deleteDocument(doc['id'], doc['filename']),
                   icon: Icon(Icons.delete, size: 16),
                   label: Text('Delete'),
                   style: OutlinedButton.styleFrom(
@@ -560,9 +559,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _formatDateTime(String? dateTime) {
     if (dateTime == null) return 'Unknown';
     try {
-      final dt = DateTime.parse(dateTime);
+      // Parse the datetime string and handle microseconds
+      DateTime dt;
+      if (dateTime.contains('.')) {
+        // Remove microseconds if present (keep only 3 decimal places)
+        final parts = dateTime.split('.');
+        final cleanDateTime = '${parts[0]}.${parts[1].substring(0, 3)}Z';
+        dt = DateTime.parse(cleanDateTime).toLocal();
+      } else {
+        dt = DateTime.parse(dateTime).toLocal();
+      }
+
       final now = DateTime.now();
       final difference = now.difference(dt);
+
+      print(
+          'DateTime parsing - Original: $dateTime, Parsed: $dt, Now: $now, Difference: ${difference.inMinutes} minutes');
 
       if (difference.inDays > 7) {
         return '${dt.day}/${dt.month}/${dt.year}';
@@ -576,6 +588,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         return 'Just now';
       }
     } catch (e) {
+      print('DateTime parsing error: $e for input: $dateTime');
       return 'Unknown';
     }
   }
@@ -674,8 +687,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildDetailRow('ID', '${doc['id']}'),
-                _buildDetailRow(
-                    'Filename', doc['filename'] ?? 'Unknown'),
+                _buildDetailRow('Filename', doc['filename'] ?? 'Unknown'),
                 _buildDetailRow('User ID', doc['user_id'] ?? 'Unknown'),
                 _buildDetailRow('File Size', _formatFileSize(doc['file_size'])),
                 _buildDetailRow(
