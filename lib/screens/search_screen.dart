@@ -412,7 +412,7 @@ class _SearchScreenState extends State<SearchScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    result['document_name'] ?? 'Unknown Document',
+                    result['document_filename'] ?? 'Unknown Document',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
