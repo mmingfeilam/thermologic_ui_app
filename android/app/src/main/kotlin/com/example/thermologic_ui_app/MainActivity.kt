@@ -1,4 +1,4 @@
-package com.example.thermologic__ui_app
+package com.example.thermologic_ui_app
 
 import io.flutter.embedding.android.FlutterActivity
 

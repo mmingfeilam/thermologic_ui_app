@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="thermologic__ui_app"
+        android:label="thermologic_ui_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

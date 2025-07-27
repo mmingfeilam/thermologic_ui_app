@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "thermologic__ui_app" "\0"
+            VALUE "FileDescription", "thermologic_ui_app" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "thermologic__ui_app" "\0"
+            VALUE "InternalName", "thermologic_ui_app" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "thermologic__ui_app.exe" "\0"
-            VALUE "ProductName", "thermologic__ui_app" "\0"
+            VALUE "OriginalFilename", "thermologic_ui_app.exe" "\0"
+            VALUE "ProductName", "thermologic_ui_app" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

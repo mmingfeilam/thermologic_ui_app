@@ -1,6 +1,6 @@
 {
-    "name": "thermologic__ui_app",
-    "short_name": "thermologic__ui_app",
+    "name": "thermologic_ui_app",
+    "short_name": "thermologic_ui_app",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

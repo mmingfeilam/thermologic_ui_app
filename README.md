@@ -1,4 +1,4 @@
-# thermologic__ui_app
+# thermologic_ui_app
 
 A new Flutter project.
 
