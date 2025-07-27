@@ -1,0 +1,64 @@
+name: thermologic_ui_app
+description: "Industrial Refrigeration Manual Assistant - AI-powered document search and management for technicians"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.1.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # HTTP client for API calls
+  http: ^1.2.1
+  
+  # File picking functionality
+  file_picker: ^8.1.2
+  
+  # Path utilities for file handling
+  path: ^1.9.0
+  
+  # JSON annotation for data models
+  json_annotation: ^4.9.0
+  
+  # State management (if needed later)
+  provider: ^6.1.2
+  
+  # Shared preferences for local storage
+  shared_preferences: ^2.3.2
+  
+  # URL launcher for opening links
+  url_launcher: ^6.3.1
+  
+  # Icons
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+    
+  # Linting rules
+  flutter_lints: ^4.0.0
+  
+  # JSON serialization code generation
+  json_serializable: ^6.8.0
+  build_runner: ^2.4.13
+
+flutter:
+  uses-material-design: true
+  generate: true
+
+  # Add app icons and images
+  assets:
+    - assets/images/
+    - assets/icons/
+
+  # Add custom fonts if needed
+  # fonts:
+  #   - family: Roboto
+  #     fonts:
+  #       - asset: assets/fonts/Roboto-Regular.ttf
+  #       - asset: assets/fonts/Roboto-Bold.ttf
+  #         weight: 700
