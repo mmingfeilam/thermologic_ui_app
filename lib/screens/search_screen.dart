@@ -48,140 +48,159 @@ class _SearchScreenState extends State<SearchScreen> {
     return GestureDetector(
       // Tap anywhere to dismiss keyboard
       onTap: _dismissKeyboard,
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Search Manuals',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E3A8A),
-                  ),
-            ),
-            SizedBox(height: 16),
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Search Manuals',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E3A8A),
+                      fontSize: 20, // Slightly smaller for mobile
+                    ),
+              ),
+              SizedBox(height: 12),
 
-            // Search Input Card
-            Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    // Search TextField
-                    TextField(
-                      controller: _searchController,
-                      focusNode: _focusNode, // Add focus node
-                      decoration: InputDecoration(
-                        labelText: 'Search query',
-                        hintText:
-                            'e.g., "temperature control", "compressor issues"',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.search),
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Clear button
-                            if (_searchController.text.isNotEmpty)
+              // Search Input Card - More compact
+              Card(
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      // Search TextField
+                      TextField(
+                        controller: _searchController,
+                        focusNode: _focusNode,
+                        decoration: InputDecoration(
+                          labelText: 'Search query',
+                          hintText: 'e.g., "temperature control"',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.search, size: 20),
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Clear button
+                              if (_searchController.text.isNotEmpty)
+                                IconButton(
+                                  icon: Icon(Icons.clear, size: 20),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchResults = [];
+                                      _lastQuery = null;
+                                    });
+                                  },
+                                ),
+                              // Keyboard dismiss button
                               IconButton(
-                                icon: Icon(Icons.clear),
-                                onPressed: () {
-                                  _searchController.clear();
+                                icon: Icon(Icons.keyboard_hide, size: 20),
+                                onPressed: _dismissKeyboard,
+                                tooltip: 'Hide keyboard',
+                              ),
+                            ],
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                        ),
+                        onSubmitted: (value) {
+                          _performSearch();
+                          _dismissKeyboard();
+                        },
+                        onChanged: (_) => setState(() {}),
+                        textInputAction: TextInputAction.search,
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      SizedBox(height: 12),
+
+                      // Search Controls Row - Responsive
+                      Column(
+                        children: [
+                          // Search Button - Full width on mobile
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed:
+                                  _searchController.text.trim().isNotEmpty &&
+                                          !_isSearching
+                                      ? () {
+                                          _performSearch();
+                                          _dismissKeyboard();
+                                        }
+                                      : null,
+                              icon: _isSearching
+                                  ? SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Icon(Icons.search, size: 18),
+                              label: Text(
+                                _isSearching ? 'Searching...' : 'Search',
+                                style: TextStyle(fontSize: 14),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: 8),
+
+                          // Result Limit - Centered
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey[300]!),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                value: _resultLimit,
+                                isExpanded: false,
+                                items: [5, 10, 20, 50].map((limit) {
+                                  return DropdownMenuItem(
+                                    value: limit,
+                                    child: Text(
+                                      '$limit results',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
                                   setState(() {
-                                    _searchResults = [];
-                                    _lastQuery = null;
+                                    _resultLimit = value!;
                                   });
+                                  _dismissKeyboard();
+                                  // Auto-search if there's already a query
+                                  if (_lastQuery != null &&
+                                      _lastQuery!.isNotEmpty) {
+                                    _performSearch();
+                                  }
                                 },
                               ),
-                            // Keyboard dismiss button (iOS style)
-                            IconButton(
-                              icon: Icon(Icons.keyboard_hide),
-                              onPressed: _dismissKeyboard,
-                              tooltip: 'Hide keyboard',
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      onSubmitted: (value) {
-                        _performSearch();
-                        _dismissKeyboard(); // Dismiss keyboard after search
-                      },
-                      onChanged: (_) => setState(() {}),
-                      textInputAction: TextInputAction.search,
-                    ),
-                    SizedBox(height: 16),
-
-                    // Search Controls Row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed:
-                                _searchController.text.trim().isNotEmpty &&
-                                        !_isSearching
-                                    ? () {
-                                        _performSearch();
-                                        _dismissKeyboard(); // Dismiss keyboard when searching
-                                      }
-                                    : null,
-                            icon: _isSearching
-                                ? SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Icon(Icons.search),
-                            label:
-                                Text(_isSearching ? 'Searching...' : 'Search'),
-                            style: ElevatedButton.styleFrom(
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 12),
-
-                        // Result Limit Dropdown
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey[300]!),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<int>(
-                              value: _resultLimit,
-                              items: [5, 10, 20, 50].map((limit) {
-                                return DropdownMenuItem(
-                                  value: limit,
-                                  child: Text('$limit results'),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _resultLimit = value!;
-                                });
-                                _dismissKeyboard(); // Dismiss keyboard when dropdown changes
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
 
-            SizedBox(height: 16),
+              SizedBox(height: 12),
 
-            // Results Section
-            Expanded(
-              child: _buildResultsSection(),
-            ),
-          ],
+              // Results Section
+              Expanded(
+                child: _buildResultsSection(),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -270,18 +289,22 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                   SizedBox(height: 8),
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 4,
+                    runSpacing: 4,
                     children: _searchSuggestions.map((suggestion) {
                       return ActionChip(
-                        label: Text(suggestion),
+                        label: Text(
+                          suggestion,
+                          style: TextStyle(fontSize: 11),
+                        ),
                         onPressed: () {
                           _searchController.text = suggestion;
                           _performSearch();
-                          _dismissKeyboard(); // Dismiss keyboard when suggestion tapped
+                          _dismissKeyboard();
                         },
                         backgroundColor: Color(0xFF1E3A8A).withOpacity(0.1),
                         labelStyle: TextStyle(color: Color(0xFF1E3A8A)),
+                        padding: EdgeInsets.symmetric(horizontal: 6),
                       );
                     }).toList(),
                   ),
@@ -395,20 +418,27 @@ class _SearchScreenState extends State<SearchScreen> {
       children: [
         // Results Header
         Padding(
-          padding: EdgeInsets.only(bottom: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          padding: EdgeInsets.only(bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Results for "$_lastQuery"',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF1E3A8A),
+                  fontSize: 14,
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
+              SizedBox(height: 4),
               Text(
                 '${_searchResults.length} found',
-                style: TextStyle(color: Colors.grey[600]),
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -445,105 +475,140 @@ class _SearchScreenState extends State<SearchScreen> {
     return Card(
       margin: EdgeInsets.only(bottom: 12),
       child: Padding(
-        padding: EdgeInsets.all(16),
+        padding: EdgeInsets.all(12), // Reduced padding for mobile
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Row
-            Row(
+            // Header Row - Stack for better mobile layout
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    result['document_filename'] ?? 'Unknown Document',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Color(0xFF1E3A8A),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        result['document_filename'] ?? 'Unknown Document',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15, // Slightly smaller for mobile
+                          color: Color(0xFF1E3A8A),
+                        ),
+                        maxLines: 2, // Allow wrapping
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: relevanceColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${(similarity * 100).toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: relevanceColor,
+                    SizedBox(width: 8),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: relevanceColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${(similarity * 100).toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: relevanceColor,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
 
             // Metadata Row
-            SizedBox(height: 8),
-            Row(
+            SizedBox(height: 6),
+            Wrap(
+              spacing: 12,
               children: [
-                if (result['page_number'] != null) ...[
-                  Icon(Icons.description, size: 14, color: Colors.grey[600]),
-                  SizedBox(width: 4),
-                  Text(
-                    'Page ${result['page_number']}',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12,
+                if (result['page_number'] != null)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.description,
+                          size: 12, color: Colors.grey[600]),
+                      SizedBox(width: 3),
+                      Text(
+                        'Page ${result['page_number']}',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.star, size: 12, color: relevanceColor),
+                    SizedBox(width: 3),
+                    Text(
+                      _getRelevanceText(similarity),
+                      style: TextStyle(
+                        color: relevanceColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  SizedBox(width: 16),
-                ],
-                Icon(Icons.star, size: 14, color: relevanceColor),
-                SizedBox(width: 4),
-                Text(
-                  _getRelevanceText(similarity),
-                  style: TextStyle(
-                    color: relevanceColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  ],
                 ),
               ],
             ),
 
-            SizedBox(height: 12),
+            SizedBox(height: 8),
 
-            // Content
-            Text(
-              result['content'] ?? 'No content available',
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.4,
-                color: Colors.grey[800],
+            // Content - Better text wrapping
+            Container(
+              width: double.infinity,
+              child: Text(
+                result['content'] ?? 'No content available',
+                style: TextStyle(
+                  fontSize: 13, // Slightly smaller for mobile
+                  height: 1.3,
+                  color: Colors.grey[800],
+                ),
+                maxLines: 4, // Reduced lines for mobile
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 6,
-              overflow: TextOverflow.ellipsis,
             ),
 
-            SizedBox(height: 12),
+            SizedBox(height: 8),
 
-            // Action Buttons
+            // Action Buttons - Better mobile layout
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton.icon(
-                  onPressed: () => _showFullContent(result),
-                  icon: Icon(Icons.visibility, size: 16),
-                  label: Text('View Full'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Color(0xFF1E3A8A),
+                Flexible(
+                  child: TextButton.icon(
+                    onPressed: () => _showFullContent(result),
+                    icon: Icon(Icons.visibility, size: 14),
+                    label: Text(
+                      'View',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Color(0xFF1E3A8A),
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size(0, 32),
+                    ),
                   ),
                 ),
-                SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: () => _copyContent(result['content'] ?? ''),
-                  icon: Icon(Icons.copy, size: 16),
-                  label: Text('Copy'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.grey[700],
+                SizedBox(width: 4),
+                Flexible(
+                  child: TextButton.icon(
+                    onPressed: () => _copyContent(result['content'] ?? ''),
+                    icon: Icon(Icons.copy, size: 14),
+                    label: Text(
+                      'Copy',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.grey[700],
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size(0, 32),
+                    ),
                   ),
                 ),
               ],
