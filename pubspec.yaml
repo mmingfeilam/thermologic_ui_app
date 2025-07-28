@@ -32,6 +32,10 @@ dependencies:
   # URL launcher for opening links
   url_launcher: ^6.3.1
   
+  # UPDATED: Voice-to-text dependencies with compatible versions
+  speech_to_text: ^7.0.0
+  permission_handler: ^11.3.1
+  
   # Icons
   cupertino_icons: ^1.0.2
 

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Add this for clipboard
+import 'package:flutter/services.dart';
 import '../services/api_service.dart';
+
+// Voice service import with error handling
+import '../services/voice_service.dart' as voice;
 
 class SearchScreen extends StatefulWidget {
   @override
@@ -17,6 +20,11 @@ class _SearchScreenState extends State<SearchScreen> {
   String? _lastQuery;
   int _resultLimit = 10;
 
+  // Voice-to-text state variables
+  bool _isListening = false;
+  bool _voiceAvailable = false;
+  String _voiceError = '';
+
   // Predefined search suggestions for industrial refrigeration
   final List<String> _searchSuggestions = [
     'temperature sensor malfunction',
@@ -32,16 +40,133 @@ class _SearchScreenState extends State<SearchScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _checkVoiceAvailability();
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     _scrollController.dispose();
-    _focusNode.dispose(); // Don't forget to dispose focus node
+    _focusNode.dispose();
+    // Clean up voice service
+    voice.VoiceService.dispose();
     super.dispose();
+  }
+
+  // Check if voice input is available
+  Future<void> _checkVoiceAvailability() async {
+    try {
+      print('🎤 Checking voice availability...');
+      print('🎤 About to call voice.VoiceService.isAvailable()');
+
+      final available = await voice.VoiceService.isAvailable();
+      print('🎤 Voice available: $available');
+
+      if (mounted) {
+        setState(() {
+          _voiceAvailable = available;
+        });
+      }
+
+      if (available) {
+        print('🎤 Voice service initialized successfully');
+      } else {
+        print('🎤 Voice service not available');
+        // Let's try to get more debug info
+        print('🎤 Attempting manual permission check...');
+        final hasPermission =
+            await voice.VoiceService.hasMicrophonePermission();
+        print('🎤 Current microphone permission: $hasPermission');
+
+        if (!hasPermission) {
+          print('🎤 Requesting microphone permission manually...');
+          final granted =
+              await voice.VoiceService.requestMicrophonePermission();
+          print('🎤 Permission request result: $granted');
+        }
+      }
+    } catch (e, stackTrace) {
+      print('🎤 Voice not available - Error: $e');
+      print('🎤 Stack trace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _voiceAvailable = false;
+          _voiceError = 'Voice service error: ${e.toString()}';
+        });
+      }
+    }
   }
 
   // Method to dismiss keyboard
   void _dismissKeyboard() {
     FocusScope.of(context).unfocus();
+  }
+
+  // Start voice input
+  Future<void> _startVoiceInput() async {
+    try {
+      setState(() {
+        _isListening = true;
+        _voiceError = '';
+      });
+
+      _dismissKeyboard(); // Hide keyboard when starting voice input
+
+      await voice.VoiceService.startListening(
+        onResult: (recognizedWords) {
+          // Update search field with recognized text
+          setState(() {
+            _searchController.text = recognizedWords.trim();
+            _isListening = false;
+          });
+
+          // Auto-search if we got results
+          if (recognizedWords.trim().isNotEmpty) {
+            _performSearch();
+          }
+        },
+        onError: (error) {
+          setState(() {
+            _isListening = false;
+            _voiceError = error;
+          });
+
+          // Clear error after a few seconds
+          Future.delayed(Duration(seconds: 3), () {
+            if (mounted) {
+              setState(() {
+                _voiceError = '';
+              });
+            }
+          });
+        },
+        partialResults: false, // Only get final results
+      );
+    } catch (e) {
+      setState(() {
+        _isListening = false;
+        _voiceError = 'Voice input failed: ${e.toString()}';
+      });
+
+      // Clear error after a few seconds
+      Future.delayed(Duration(seconds: 3), () {
+        if (mounted) {
+          setState(() {
+            _voiceError = '';
+          });
+        }
+      });
+    }
+  }
+
+  // Stop voice input
+  Future<void> _stopVoiceInput() async {
+    await voice.VoiceService.stopListening();
+    setState(() {
+      _isListening = false;
+    });
   }
 
   @override
@@ -77,12 +202,30 @@ class _SearchScreenState extends State<SearchScreen> {
                         focusNode: _focusNode,
                         decoration: InputDecoration(
                           labelText: 'Search query',
-                          hintText: 'e.g., "temperature control"',
+                          hintText: _voiceAvailable
+                              ? 'e.g., "temperature control" or tap mic to speak'
+                              : 'e.g., "temperature control"',
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.search, size: 20),
                           suffixIcon: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              // Voice input button
+                              if (_voiceAvailable)
+                                IconButton(
+                                  icon: Icon(
+                                    _isListening ? Icons.mic : Icons.mic_none,
+                                    color:
+                                        _isListening ? Colors.red : Colors.blue,
+                                    size: 20,
+                                  ),
+                                  onPressed: _isListening
+                                      ? _stopVoiceInput
+                                      : _startVoiceInput,
+                                  tooltip: _isListening
+                                      ? 'Stop listening'
+                                      : 'Voice input',
+                                ),
                               // Clear button
                               if (_searchController.text.isNotEmpty)
                                 IconButton(
@@ -114,11 +257,108 @@ class _SearchScreenState extends State<SearchScreen> {
                         textInputAction: TextInputAction.search,
                         style: TextStyle(fontSize: 14),
                       ),
+
+                      // Voice status indicator
+                      if (_voiceAvailable &&
+                          (_isListening || _voiceError.isNotEmpty)) ...[
+                        SizedBox(height: 8),
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _isListening
+                                ? Colors.red.shade50
+                                : _voiceError.isNotEmpty
+                                    ? Colors.red.shade50
+                                    : Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: _isListening
+                                  ? Colors.red.shade200
+                                  : _voiceError.isNotEmpty
+                                      ? Colors.red.shade200
+                                      : Colors.blue.shade200,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _isListening
+                                    ? Icons.mic
+                                    : _voiceError.isNotEmpty
+                                        ? Icons.error_outline
+                                        : Icons.mic_none,
+                                color: _isListening
+                                    ? Colors.red
+                                    : _voiceError.isNotEmpty
+                                        ? Colors.red
+                                        : Colors.blue,
+                                size: 16,
+                              ),
+                              SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  _isListening
+                                      ? 'Listening... Speak now'
+                                      : _voiceError.isNotEmpty
+                                          ? _voiceError
+                                          : 'Voice input ready',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: _isListening
+                                        ? Colors.red.shade700
+                                        : _voiceError.isNotEmpty
+                                            ? Colors.red.shade700
+                                            : Colors.blue.shade700,
+                                  ),
+                                ),
+                              ),
+                              if (_isListening)
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
                       SizedBox(height: 12),
 
                       // Search Controls Row - Responsive
                       Column(
                         children: [
+                          // Voice input controls row
+                          if (_voiceAvailable) ...[
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _isListening
+                                    ? _stopVoiceInput
+                                    : _startVoiceInput,
+                                icon: Icon(
+                                  _isListening ? Icons.stop : Icons.mic,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  _isListening
+                                      ? 'Stop Listening'
+                                      : 'Voice Search',
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                      _isListening ? Colors.red : Colors.green,
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                          ],
+
                           // Search Button - Full width on mobile
                           SizedBox(
                             width: double.infinity,
@@ -270,12 +510,15 @@ class _SearchScreenState extends State<SearchScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Quick search and voice section
                   Row(
                     children: [
                       Icon(Icons.touch_app, color: Color(0xFF1E3A8A)),
                       SizedBox(width: 8),
                       Text(
-                        'Quick Search',
+                        _voiceAvailable
+                            ? 'Quick Search & Voice'
+                            : 'Quick Search',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF1E3A8A),
@@ -285,10 +528,106 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                   SizedBox(height: 12),
                   Text(
-                    'Tap any suggestion to search:',
+                    _voiceAvailable
+                        ? 'Tap any suggestion to search, or use voice input:'
+                        : 'Tap any suggestion to search:',
                     style: TextStyle(color: Colors.grey[600]),
                   ),
                   SizedBox(height: 8),
+
+                  // Voice input button (prominent)
+                  if (_voiceAvailable) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed:
+                            _isListening ? _stopVoiceInput : _startVoiceInput,
+                        icon: Icon(
+                          _isListening ? Icons.stop : Icons.mic,
+                          size: 20,
+                        ),
+                        label: Text(
+                          _isListening ? 'Stop Listening' : 'Tap to Speak',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              _isListening ? Colors.red : Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 12),
+
+                    // Voice status
+                    if (_isListening || _voiceError.isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _isListening
+                              ? Colors.green.shade50
+                              : Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _isListening
+                                ? Colors.green.shade200
+                                : Colors.red.shade200,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _isListening ? Icons.mic : Icons.error_outline,
+                              color: _isListening ? Colors.green : Colors.red,
+                              size: 18,
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _isListening
+                                    ? 'Listening... Speak your search query clearly'
+                                    : _voiceError,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: _isListening
+                                      ? Colors.green.shade700
+                                      : Colors.red.shade700,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            if (_isListening)
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+
+                    if (_isListening || _voiceError.isNotEmpty)
+                      SizedBox(height: 12),
+
+                    Text(
+                      'Or tap a suggestion below:',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                  ],
                   Wrap(
                     spacing: 4,
                     runSpacing: 4,

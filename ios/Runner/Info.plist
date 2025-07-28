@@ -45,11 +45,14 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>We need microphone access to record.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to your files to pick documents</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ThermoLogic needs microphone access to enable voice search for industrial refrigeration manuals and technical documentation.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>ThermoLogic uses speech recognition to convert your voice into search queries for faster access to refrigeration technical manuals.</string>
+
 </dict>
 </plist>
