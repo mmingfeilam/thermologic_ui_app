@@ -9,6 +9,7 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
+  final _focusNode = FocusNode(); // Add focus node for keyboard control
 
   List<dynamic> _searchResults = [];
   bool _isSearching = false;
@@ -33,124 +34,155 @@ class _SearchScreenState extends State<SearchScreen> {
   void dispose() {
     _searchController.dispose();
     _scrollController.dispose();
+    _focusNode.dispose(); // Don't forget to dispose focus node
     super.dispose();
+  }
+
+  // Method to dismiss keyboard
+  void _dismissKeyboard() {
+    FocusScope.of(context).unfocus();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Search Manuals',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E3A8A),
-                ),
-          ),
-          SizedBox(height: 16),
+    return GestureDetector(
+      // Tap anywhere to dismiss keyboard
+      onTap: _dismissKeyboard,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Search Manuals',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E3A8A),
+                  ),
+            ),
+            SizedBox(height: 16),
 
-          // Search Input Card
-          Card(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  // Search TextField
-                  TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      labelText: 'Search query',
-                      hintText:
-                          'e.g., "temperature control", "compressor issues"',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.search),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(Icons.clear),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _searchResults = [];
-                                  _lastQuery = null;
-                                });
-                              },
-                            )
-                          : null,
+            // Search Input Card
+            Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    // Search TextField
+                    TextField(
+                      controller: _searchController,
+                      focusNode: _focusNode, // Add focus node
+                      decoration: InputDecoration(
+                        labelText: 'Search query',
+                        hintText:
+                            'e.g., "temperature control", "compressor issues"',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.search),
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Clear button
+                            if (_searchController.text.isNotEmpty)
+                              IconButton(
+                                icon: Icon(Icons.clear),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchResults = [];
+                                    _lastQuery = null;
+                                  });
+                                },
+                              ),
+                            // Keyboard dismiss button (iOS style)
+                            IconButton(
+                              icon: Icon(Icons.keyboard_hide),
+                              onPressed: _dismissKeyboard,
+                              tooltip: 'Hide keyboard',
+                            ),
+                          ],
+                        ),
+                      ),
+                      onSubmitted: (value) {
+                        _performSearch();
+                        _dismissKeyboard(); // Dismiss keyboard after search
+                      },
+                      onChanged: (_) => setState(() {}),
+                      textInputAction: TextInputAction.search,
                     ),
-                    onSubmitted: (_) => _performSearch(),
-                    onChanged: (_) => setState(() {}),
-                    textInputAction: TextInputAction.search,
-                  ),
-                  SizedBox(height: 16),
+                    SizedBox(height: 16),
 
-                  // Search Controls Row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _searchController.text.trim().isNotEmpty &&
-                                  !_isSearching
-                              ? _performSearch
-                              : null,
-                          icon: _isSearching
-                              ? SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Icon(Icons.search),
-                          label: Text(_isSearching ? 'Searching...' : 'Search'),
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(vertical: 16),
+                    // Search Controls Row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed:
+                                _searchController.text.trim().isNotEmpty &&
+                                        !_isSearching
+                                    ? () {
+                                        _performSearch();
+                                        _dismissKeyboard(); // Dismiss keyboard when searching
+                                      }
+                                    : null,
+                            icon: _isSearching
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Icon(Icons.search),
+                            label:
+                                Text(_isSearching ? 'Searching...' : 'Search'),
+                            style: ElevatedButton.styleFrom(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                            ),
                           ),
                         ),
-                      ),
-                      SizedBox(width: 12),
+                        SizedBox(width: 12),
 
-                      // Result Limit Dropdown
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[300]!),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<int>(
-                            value: _resultLimit,
-                            items: [5, 10, 20, 50].map((limit) {
-                              return DropdownMenuItem(
-                                value: limit,
-                                child: Text('$limit results'),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _resultLimit = value!;
-                              });
-                            },
+                        // Result Limit Dropdown
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey[300]!),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<int>(
+                              value: _resultLimit,
+                              items: [5, 10, 20, 50].map((limit) {
+                                return DropdownMenuItem(
+                                  value: limit,
+                                  child: Text('$limit results'),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _resultLimit = value!;
+                                });
+                                _dismissKeyboard(); // Dismiss keyboard when dropdown changes
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
 
-          SizedBox(height: 16),
+            SizedBox(height: 16),
 
-          // Results Section
-          Expanded(
-            child: _buildResultsSection(),
-          ),
-        ],
+            // Results Section
+            Expanded(
+              child: _buildResultsSection(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -246,6 +278,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         onPressed: () {
                           _searchController.text = suggestion;
                           _performSearch();
+                          _dismissKeyboard(); // Dismiss keyboard when suggestion tapped
                         },
                         backgroundColor: Color(0xFF1E3A8A).withOpacity(0.1),
                         labelStyle: TextStyle(color: Color(0xFF1E3A8A)),
