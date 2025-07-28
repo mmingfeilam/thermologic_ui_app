@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Add this for clipboard
 import '../services/api_service.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -416,28 +417,37 @@ class _SearchScreenState extends State<SearchScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Results Header
-        Padding(
-          padding: EdgeInsets.only(bottom: 12),
+        // Results Header - More compact
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.only(bottom: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Results for "$_lastQuery"',
+                'Results for',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF1E3A8A),
-                  fontSize: 14,
+                  fontSize: 13,
                 ),
-                maxLines: 2,
+              ),
+              Text(
+                '"$_lastQuery"',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E3A8A),
+                  fontSize: 13,
+                ),
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              SizedBox(height: 4),
+              SizedBox(height: 2),
               Text(
                 '${_searchResults.length} found',
                 style: TextStyle(
                   color: Colors.grey[600],
-                  fontSize: 12,
+                  fontSize: 11,
                 ),
               ),
             ],
@@ -473,142 +483,147 @@ class _SearchScreenState extends State<SearchScreen> {
     final relevanceColor = _getRelevanceColor(similarity);
 
     return Card(
-      margin: EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: 8),
       child: Padding(
-        padding: EdgeInsets.all(12), // Reduced padding for mobile
+        padding: EdgeInsets.all(10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Row - Stack for better mobile layout
-            Column(
+            // Header Row - Better mobile layout
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
                         result['document_filename'] ?? 'Unknown Document',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 15, // Slightly smaller for mobile
+                          fontSize: 14,
                           color: Color(0xFF1E3A8A),
                         ),
-                        maxLines: 2, // Allow wrapping
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    SizedBox(width: 8),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: relevanceColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${(similarity * 100).toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: relevanceColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-
-            // Metadata Row
-            SizedBox(height: 6),
-            Wrap(
-              spacing: 12,
-              children: [
-                if (result['page_number'] != null)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.description,
-                          size: 12, color: Colors.grey[600]),
-                      SizedBox(width: 3),
-                      Text(
-                        'Page ${result['page_number']}',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 11,
-                        ),
+                      SizedBox(height: 4),
+                      // Metadata Row
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          if (result['page_number'] != null)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.description,
+                                    size: 11, color: Colors.grey[600]),
+                                SizedBox(width: 2),
+                                Text(
+                                  'Page ${result['page_number']}',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.star, size: 11, color: relevanceColor),
+                              SizedBox(width: 2),
+                              Text(
+                                _getRelevanceText(similarity),
+                                style: TextStyle(
+                                  color: relevanceColor,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.star, size: 12, color: relevanceColor),
-                    SizedBox(width: 3),
-                    Text(
-                      _getRelevanceText(similarity),
-                      style: TextStyle(
-                        color: relevanceColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
+                ),
+                SizedBox(width: 8),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: relevanceColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${(similarity * 100).toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: relevanceColor,
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
 
             SizedBox(height: 8),
 
-            // Content - Better text wrapping
-            Container(
-              width: double.infinity,
-              child: Text(
-                result['content'] ?? 'No content available',
-                style: TextStyle(
-                  fontSize: 13, // Slightly smaller for mobile
-                  height: 1.3,
-                  color: Colors.grey[800],
-                ),
-                maxLines: 4, // Reduced lines for mobile
-                overflow: TextOverflow.ellipsis,
-              ),
+            // Content - Better text wrapping with strict constraints
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return Container(
+                  width: constraints.maxWidth,
+                  child: Text(
+                    result['content'] ?? 'No content available',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.3,
+                      color: Colors.grey[800],
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              },
             ),
 
-            SizedBox(height: 8),
+            SizedBox(height: 6),
 
-            // Action Buttons - Better mobile layout
+            // Action Buttons - Compact row
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Flexible(
-                  child: TextButton.icon(
-                    onPressed: () => _showFullContent(result),
-                    icon: Icon(Icons.visibility, size: 14),
-                    label: Text(
-                      'View',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Color(0xFF1E3A8A),
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: Size(0, 32),
-                    ),
+                TextButton(
+                  onPressed: () => _showFullContent(result),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Color(0xFF1E3A8A),
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size(0, 28),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.visibility, size: 12),
+                      SizedBox(width: 4),
+                      Text('View', style: TextStyle(fontSize: 11)),
+                    ],
                   ),
                 ),
-                SizedBox(width: 4),
-                Flexible(
-                  child: TextButton.icon(
-                    onPressed: () => _copyContent(result['content'] ?? ''),
-                    icon: Icon(Icons.copy, size: 14),
-                    label: Text(
-                      'Copy',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.grey[700],
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: Size(0, 32),
-                    ),
+                TextButton(
+                  onPressed: () => _copyContent(result['content'] ?? ''),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.grey[700],
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size(0, 28),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.copy, size: 12),
+                      SizedBox(width: 4),
+                      Text('Copy', style: TextStyle(fontSize: 11)),
+                    ],
                   ),
                 ),
               ],
@@ -719,13 +734,24 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  void _copyContent(String content) {
-    // Note: For actual clipboard functionality, you'd need to add clipboard package
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Content copied to clipboard'),
-        backgroundColor: Colors.green,
-      ),
-    );
+  void _copyContent(String content) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: content));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Content copied to clipboard'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to copy content'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 }
