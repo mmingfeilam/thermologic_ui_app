@@ -235,12 +235,31 @@ class VoiceService {
     return status.isGranted;
   }
 
-  /// Request microphone permission
+  /// Request microphone permission with better handling
   static Future<bool> requestMicrophonePermission() async {
     print('🎤 Requesting microphone permission...');
+
     final status = await Permission.microphone.request();
     print('🎤 Permission request result: $status');
+
+    // Check if permanently denied
+    if (status.isPermanentlyDenied) {
+      print('🎤 Permission permanently denied, need to open settings');
+      return false;
+    }
+
     return status.isGranted;
+  }
+
+  /// Check if we need to show settings dialog
+  static Future<bool> isPermissionPermanentlyDenied() async {
+    final status = await Permission.microphone.status;
+    return status.isPermanentlyDenied;
+  }
+
+  /// Open app settings (for permanently denied permissions)
+  static Future<void> openAppSettings() async {
+    await openAppSettings();
   }
 
   /// Dispose resources (call when app is disposed)

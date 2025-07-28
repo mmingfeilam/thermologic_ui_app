@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 
-// Voice service import with error handling
+// Re-enable voice service
 import '../services/voice_service.dart' as voice;
 
 class SearchScreen extends StatefulWidget {
@@ -42,6 +42,7 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   void initState() {
     super.initState();
+    // Re-enable voice availability check
     _checkVoiceAvailability();
   }
 
@@ -50,12 +51,12 @@ class _SearchScreenState extends State<SearchScreen> {
     _searchController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
-    // Clean up voice service
+    // Re-enable voice cleanup
     voice.VoiceService.dispose();
     super.dispose();
   }
 
-  // Check if voice input is available
+  // Re-enable voice availability check
   Future<void> _checkVoiceAvailability() async {
     try {
       print('🎤 Checking voice availability...');
@@ -104,9 +105,17 @@ class _SearchScreenState extends State<SearchScreen> {
     FocusScope.of(context).unfocus();
   }
 
-  // Start voice input
+  // Start voice input with better permission handling
   Future<void> _startVoiceInput() async {
     try {
+      // Check if permission is permanently denied first
+      final isPermanentlyDenied =
+          await voice.VoiceService.isPermissionPermanentlyDenied();
+      if (isPermanentlyDenied) {
+        _showPermissionDialog();
+        return;
+      }
+
       setState(() {
         _isListening = true;
         _voiceError = '';
@@ -161,7 +170,32 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  // Stop voice input
+  // Show permission dialog for permanently denied permissions
+  void _showPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text("Microphone Permission Required"),
+        content: Text(
+            "Please enable microphone access in Settings > ThermoLogic to use voice search."),
+        actions: [
+          TextButton(
+            child: Text("Open Settings"),
+            onPressed: () {
+              voice.VoiceService.openAppSettings();
+              Navigator.of(context).pop();
+            },
+          ),
+          TextButton(
+            child: Text("Cancel"),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Re-enable stop voice input
   Future<void> _stopVoiceInput() async {
     await voice.VoiceService.stopListening();
     setState(() {
