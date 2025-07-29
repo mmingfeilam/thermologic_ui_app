@@ -37,15 +37,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
     setState(() => _isLoading = true);
 
     try {
+      print('Fetching documents from: ${ApiService.baseUrl}/api/v1/documents');
       final result = await ApiService.getDocuments();
+      print('API result: $result');
+
       setState(() {
         _isLoading = false;
         if (result['success']) {
           _documents = result['data']['documents'] ?? [];
+          print('Loaded ${_documents.length} documents');
+          if (_documents.isNotEmpty) {
+            print('First document: ${_documents[0]}');
+          }
           _sortDocuments();
+        } else {
+          print('API call failed: ${result['error']}');
         }
       });
     } catch (e) {
+      print('Exception loading documents: $e');
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -62,9 +72,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
         case 'oldest':
           return (a['upload_time'] ?? '').compareTo(b['upload_time'] ?? '');
         case 'name':
-          return (a['original_filename'] ?? '')
+          return (a['filename'] ?? '')
               .toLowerCase()
-              .compareTo((b['original_filename'] ?? '').toLowerCase());
+              .compareTo((b['filename'] ?? '').toLowerCase());
         case 'size':
           return (b['file_size'] ?? 0).compareTo(a['file_size'] ?? 0);
         case 'newest':
@@ -114,85 +124,79 @@ class _HistoryScreenState extends State<HistoryScreen> {
           Card(
             child: Padding(
               padding: EdgeInsets.all(12),
-              child: Row(
+              child: Column(
                 children: [
                   // Status Filter
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Filter by Status',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey[700],
-                          ),
+                  Row(
+                    children: [
+                      Text(
+                        'Filter by Status',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[700],
                         ),
-                        SizedBox(height: 4),
-                        DropdownButtonFormField<String>(
-                          value: _filterStatus,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 8),
-                            border: OutlineInputBorder(),
-                          ),
-                          items: _statusFilters.map((status) {
-                            return DropdownMenuItem(
-                              value: status,
-                              child: Text(_formatStatusText(status)),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _filterStatus = value!;
-                            });
-                          },
-                        ),
-                      ],
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    value: _filterStatus,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      border: OutlineInputBorder(),
                     ),
+                    items: _statusFilters.map((status) {
+                      return DropdownMenuItem(
+                        value: status,
+                        child: Text(_formatStatusText(status)),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _filterStatus = value!;
+                      });
+                    },
                   ),
 
-                  SizedBox(width: 12),
+                  SizedBox(height: 12),
 
                   // Sort Options
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Sort by',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey[700],
-                          ),
+                  Row(
+                    children: [
+                      Text(
+                        'Sort by',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[700],
                         ),
-                        SizedBox(height: 4),
-                        DropdownButtonFormField<String>(
-                          value: _sortBy,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 8),
-                            border: OutlineInputBorder(),
-                          ),
-                          items: _sortOptions.map((option) {
-                            return DropdownMenuItem(
-                              value: option,
-                              child: Text(_formatSortText(option)),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _sortBy = value!;
-                              _sortDocuments();
-                            });
-                          },
-                        ),
-                      ],
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  DropdownButtonFormField<String>(
+                    value: _sortBy,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      border: OutlineInputBorder(),
                     ),
+                    items: _sortOptions.map((option) {
+                      return DropdownMenuItem(
+                        value: option,
+                        child: Text(_formatSortText(option)),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _sortBy = value!;
+                        _sortDocuments();
+                      });
+                    },
                   ),
                 ],
               ),
@@ -312,6 +316,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildDocumentCard(Map<String, dynamic> doc) {
+    // Debug: Print the document data
+    print('Document data: $doc');
+    print('Filename field: ${doc['filename']}');
+    print('Keys available: ${doc.keys.toList()}');
+
+    final displayName = doc['filename'] ?? 'Unknown File';
+    print('Display name: $displayName');
+
     return Card(
       margin: EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -324,7 +336,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    doc['original_filename'] ?? 'Unknown File',
+                    doc['filename'] ?? 'Unknown File',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -446,8 +458,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
                 SizedBox(width: 8),
                 OutlinedButton.icon(
-                  onPressed: () =>
-                      _deleteDocument(doc['id'], doc['original_filename']),
+                  onPressed: () => _deleteDocument(doc['id'], doc['filename']),
                   icon: Icon(Icons.delete, size: 16),
                   label: Text('Delete'),
                   style: OutlinedButton.styleFrom(
@@ -548,9 +559,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _formatDateTime(String? dateTime) {
     if (dateTime == null) return 'Unknown';
     try {
-      final dt = DateTime.parse(dateTime);
+      // Parse the datetime string and handle microseconds
+      DateTime dt;
+      if (dateTime.contains('.')) {
+        // Remove microseconds if present (keep only 3 decimal places)
+        final parts = dateTime.split('.');
+        final cleanDateTime = '${parts[0]}.${parts[1].substring(0, 3)}Z';
+        dt = DateTime.parse(cleanDateTime).toLocal();
+      } else {
+        dt = DateTime.parse(dateTime).toLocal();
+      }
+
       final now = DateTime.now();
       final difference = now.difference(dt);
+
+      print(
+          'DateTime parsing - Original: $dateTime, Parsed: $dt, Now: $now, Difference: ${difference.inMinutes} minutes');
 
       if (difference.inDays > 7) {
         return '${dt.day}/${dt.month}/${dt.year}';
@@ -564,6 +588,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         return 'Just now';
       }
     } catch (e) {
+      print('DateTime parsing error: $e for input: $dateTime');
       return 'Unknown';
     }
   }
@@ -662,8 +687,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildDetailRow('ID', '${doc['id']}'),
-                _buildDetailRow(
-                    'Filename', doc['original_filename'] ?? 'Unknown'),
+                _buildDetailRow('Filename', doc['filename'] ?? 'Unknown'),
                 _buildDetailRow('User ID', doc['user_id'] ?? 'Unknown'),
                 _buildDetailRow('File Size', _formatFileSize(doc['file_size'])),
                 _buildDetailRow(

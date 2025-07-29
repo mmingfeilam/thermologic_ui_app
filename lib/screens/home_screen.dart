@@ -189,11 +189,15 @@ class _DashboardTabState extends State<DashboardTab> {
                       _buildHealthItem(
                           'Status', healthData!['status'] ?? 'Unknown'),
                       _buildHealthItem(
-                          'Database', healthData!['database'] ?? 'Unknown'),
-                      _buildHealthItem('Vector Store',
-                          healthData!['vector_store'] ?? 'Unknown'),
+                          'Database',
+                          healthData!['services']?['database']?['status'] ??
+                              'Unknown'),
                       _buildHealthItem(
-                          'Uptime', '${healthData!['uptime'] ?? 0}s'),
+                          'Vector Store',
+                          healthData!['services']?['vector_store']?['status'] ??
+                              'Unknown'),
+                      _buildHealthItem('Environment',
+                          healthData!['environment'] ?? 'Unknown'),
                     ] else
                       Text(
                         'Unable to connect to backend',
@@ -221,7 +225,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   Expanded(
                     child: _buildStatCard(
                       'Total Documents',
-                      '${statsData!['total_documents'] ?? 0}',
+                      '${statsData!['documents']['total'] ?? 0}',
                       Icons.description,
                       Colors.blue,
                     ),
@@ -230,7 +234,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   Expanded(
                     child: _buildStatCard(
                       'Processing',
-                      '${statsData!['processing_documents'] ?? 0}',
+                      '${statsData!['documents']['processing'] ?? 0}',
                       Icons.hourglass_empty,
                       Colors.orange,
                     ),
@@ -243,7 +247,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   Expanded(
                     child: _buildStatCard(
                       'Completed',
-                      '${statsData!['completed_documents'] ?? 0}',
+                      '${statsData!['documents']['completed'] ?? 0}',
                       Icons.check_circle,
                       Colors.green,
                     ),
@@ -252,7 +256,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   Expanded(
                     child: _buildStatCard(
                       'Total Chunks',
-                      '${statsData!['total_chunks'] ?? 0}',
+                      '${statsData!['chunks']['total'] ?? 0}',
                       Icons.inventory,
                       Colors.purple,
                     ),
