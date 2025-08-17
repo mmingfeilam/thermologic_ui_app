@@ -4,6 +4,35 @@ import 'search_screen.dart';
 import 'history_screen.dart';
 import '../services/api_service.dart';
 
+// Company model
+class Company {
+  final int id;
+  final String name;
+  final bool isSelected;
+
+  Company({
+    required this.id,
+    required this.name,
+    this.isSelected = false,
+  });
+
+  factory Company.fromJson(Map<String, dynamic> json) {
+    return Company(
+      id: json['id'],
+      name: json['name'],
+      isSelected: json['isSelected'] ?? false,
+    );
+  }
+
+  Company copyWith({bool? isSelected}) {
+    return Company(
+      id: id,
+      name: name,
+      isSelected: isSelected ?? this.isSelected,
+    );
+  }
+}
+
 class HomeScreen extends StatefulWidget {
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -11,42 +40,156 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  List<Company> companies = [];
+  late Company selectedCompany;
+  bool companiesLoaded = false;
+  bool isLoading = true;
 
   late List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
-    _screens = [
-      DashboardTab(),
-      UploadScreen(),
-      SearchScreen(),
-      HistoryScreen(),
-    ];
+    _loadCompanies();
+  }
+
+  Future<void> _loadCompanies() async {
+    setState(() => isLoading = true);
+
+    final result = await ApiService.getCompanies();
+    if (result['success']) {
+      final companiesData = List<Map<String, dynamic>>.from(result['data']);
+      companies = companiesData.map((data) => Company.fromJson(data)).toList();
+
+      // Set initial selected company
+      selectedCompany = companies.firstWhere(
+        (company) => company.isSelected,
+        orElse: () => companies.first,
+      );
+
+      // Set the company in API service
+      ApiService.setCompany(selectedCompany.id);
+
+      // Initialize screens after company is set
+      _screens = [
+        DashboardTab(selectedCompany: selectedCompany),
+        UploadScreen(),
+        SearchScreen(),
+        HistoryScreen(),
+      ];
+
+      setState(() {
+        companiesLoaded = true;
+        isLoading = false;
+      });
+    } else {
+      setState(() => isLoading = false);
+    }
+  }
+
+  void _onCompanyChanged(Company newCompany) {
+    setState(() {
+      selectedCompany = newCompany;
+      ApiService.setCompany(newCompany.id);
+
+      // Update dashboard with new company
+      _screens[0] = DashboardTab(
+        key: ValueKey(newCompany.id),
+        selectedCompany: newCompany,
+      );
+    });
+
+    // Show confirmation
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Switched to ${newCompany.name}'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Icon(Icons.ac_unit, size: 28),
-            SizedBox(width: 8),
-            Text(
-              'ThermoLogic AI',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
+        title: Text(
+          'ThermoLogic AI',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        leading: Padding(
+          padding: EdgeInsets.all(12.0),
+          child: Icon(Icons.ac_unit, size: 24),
         ),
         actions: [
+          // Company Dropdown
+          if (companiesLoaded)
+            Padding(
+              padding: EdgeInsets.only(right: 8.0),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: 140),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white54),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<Company>(
+                        value: selectedCompany,
+                        dropdownColor: Theme.of(context).primaryColor,
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                        icon: Icon(Icons.arrow_drop_down,
+                            color: Colors.white, size: 16),
+                        isExpanded: true,
+                        isDense: true,
+                        items: companies.map((company) {
+                          return DropdownMenuItem<Company>(
+                            value: company,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.business,
+                                    size: 14, color: Colors.white),
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    company.name,
+                                    style: TextStyle(
+                                        color: Colors.white, fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (Company? newCompany) {
+                          if (newCompany != null) {
+                            _onCompanyChanged(newCompany);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           IconButton(
             icon: Icon(Icons.info_outline),
             onPressed: () => _showInfoDialog(context),
           ),
         ],
       ),
-      body: _screens[_currentIndex],
+      body: companiesLoaded
+          ? _screens[_currentIndex]
+          : Center(child: Text('Loading...')),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
@@ -91,9 +234,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(fontSize: 14)),
             Text('• Real-time document processing',
                 style: TextStyle(fontSize: 14)),
+            Text('• Multi-tenant company isolation',
+                style: TextStyle(fontSize: 14)),
             SizedBox(height: 12),
             Text(
-              'Status: Production Ready ✅',
+              'Current Company: ${selectedCompany.name}',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Status: Multi-Tenant Ready ✅',
               style:
                   TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
             ),
@@ -111,6 +261,13 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class DashboardTab extends StatefulWidget {
+  final Company selectedCompany;
+
+  const DashboardTab({
+    Key? key,
+    required this.selectedCompany,
+  }) : super(key: key);
+
   @override
   _DashboardTabState createState() => _DashboardTabState();
 }
@@ -126,17 +283,38 @@ class _DashboardTabState extends State<DashboardTab> {
     _loadDashboardData();
   }
 
+  @override
+  void didUpdateWidget(DashboardTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload data if company changed
+    if (oldWidget.selectedCompany.id != widget.selectedCompany.id) {
+      _loadDashboardData();
+    }
+  }
+
   Future<void> _loadDashboardData() async {
     setState(() => isLoading = true);
 
-    final healthResult = await ApiService.checkHealth();
-    final statsResult = await ApiService.getStats();
+    try {
+      final healthResult = await ApiService.checkHealth();
+      final statsResult = await ApiService.getStats();
 
-    setState(() {
-      healthData = healthResult['success'] ? healthResult['data'] : null;
-      statsData = statsResult['success'] ? statsResult['data'] : null;
-      isLoading = false;
-    });
+      if (mounted) {
+        setState(() {
+          healthData = healthResult['success'] ? healthResult['data'] : null;
+          statsData = statsResult['success'] ? statsResult['data'] : null;
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          healthData = null;
+          statsData = null;
+          isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -153,6 +331,62 @@ class _DashboardTabState extends State<DashboardTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Company Info Header
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Color(0xFF1E3A8A).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Color(0xFF1E3A8A).withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.business, color: Color(0xFF1E3A8A)),
+                  SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Current Company',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        widget.selectedCompany.name,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E3A8A),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Spacer(),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Color(0xFF1E3A8A),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'ID: ${widget.selectedCompany.id}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 20),
+
             Text(
               'System Status',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -193,8 +427,8 @@ class _DashboardTabState extends State<DashboardTab> {
                           healthData!['services']?['database']?['status'] ??
                               'Unknown'),
                       _buildHealthItem(
-                          'Vector Store',
-                          healthData!['services']?['vector_store']?['status'] ??
+                          'Storage',
+                          healthData!['services']?['storage']?['status'] ??
                               'Unknown'),
                       _buildHealthItem('Environment',
                           healthData!['environment'] ?? 'Unknown'),
@@ -210,10 +444,10 @@ class _DashboardTabState extends State<DashboardTab> {
 
             SizedBox(height: 16),
 
-            // Statistics Cards
+            // Company Statistics Cards
             if (statsData != null) ...[
               Text(
-                'Statistics',
+                'Company Statistics',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF1E3A8A),
@@ -225,7 +459,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   Expanded(
                     child: _buildStatCard(
                       'Total Documents',
-                      '${statsData!['documents']['total'] ?? 0}',
+                      '${statsData!['database']?['total_documents'] ?? 0}',
                       Icons.description,
                       Colors.blue,
                     ),
@@ -234,7 +468,7 @@ class _DashboardTabState extends State<DashboardTab> {
                   Expanded(
                     child: _buildStatCard(
                       'Processing',
-                      '${statsData!['documents']['processing'] ?? 0}',
+                      '${statsData!['database']?['pending_processing'] ?? 0}',
                       Icons.hourglass_empty,
                       Colors.orange,
                     ),
@@ -246,19 +480,23 @@ class _DashboardTabState extends State<DashboardTab> {
                 children: [
                   Expanded(
                     child: _buildStatCard(
-                      'Completed',
-                      '${statsData!['documents']['completed'] ?? 0}',
-                      Icons.check_circle,
-                      Colors.green,
+                      'Total Chunks',
+                      '${statsData!['database']?['total_chunks'] ?? 0}',
+                      Icons.inventory,
+                      Colors.purple,
                     ),
                   ),
                   SizedBox(width: 16),
                   Expanded(
                     child: _buildStatCard(
-                      'Total Chunks',
-                      '${statsData!['chunks']['total'] ?? 0}',
-                      Icons.inventory,
-                      Colors.purple,
+                      'Vector Store',
+                      statsData!['vector_store']?['status'] == 'loaded'
+                          ? 'Active'
+                          : 'Inactive',
+                      Icons.psychology,
+                      statsData!['vector_store']?['status'] == 'loaded'
+                          ? Colors.green
+                          : Colors.red,
                     ),
                   ),
                 ],
