@@ -871,7 +871,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        result['document_filename'] ?? 'Unknown Document',
+                        result['document_name'] ?? 'Unknown Document',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,

@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // static const String baseUrl = 'http://209.38.117.86/thermologic';
-  static const String baseUrl = 'http://192.168.1.22:8000';
+  static const String baseUrl = 'http://209.38.117.86/thermologic';
+  // static const String baseUrl = 'http://192.168.1.22:8000';
 
   // Default company ID - can be changed by user
   static int currentCompanyId = 1;
@@ -166,6 +166,34 @@ class ApiService {
       };
     } catch (e) {
       return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Map<String, String> _getHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      // Add any authentication headers you need
+      // 'Authorization': 'Bearer $token',
+    };
+  }
+
+  // Add this method to api_service.dart
+  static Future<Map<String, dynamic>> getDocumentStatus(
+      String documentId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/companies/1/documents/$documentId/status'),
+        headers: _getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to get document status');
+      }
+    } catch (e) {
+      throw Exception('Status check error: $e');
     }
   }
 }
