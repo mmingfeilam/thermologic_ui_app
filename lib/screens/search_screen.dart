@@ -20,10 +20,64 @@ class _SearchScreenState extends State<SearchScreen> {
   String? _lastQuery;
   int _resultLimit = 10;
 
+  // Search mode state variables - simplified for users
+  String _searchMode = 'smart'; // Default to smart search (hybrid + reranking)
+  bool _allowGlobal = false;
+  bool _showAdvancedOptions = false; // Collapsible advanced options
+
   // Voice-to-text state variables
   bool _isListening = false;
   bool _voiceAvailable = false;
   String _voiceError = '';
+
+  // User-friendly search modes
+  final Map<String, Map<String, dynamic>> _searchModes = {
+    'smart': {
+      'name': 'Smart Search',
+      'description': 'Best results using AI + keyword matching',
+      'icon': Icons.auto_awesome,
+      'color': Colors.blue,
+      'use_hybrid': true,
+      'use_reranking': true,
+      'technical': 'hybrid + reranking',
+    },
+    'concept': {
+      'name': 'Concept Search',
+      'description': 'Find ideas and meanings, not exact words',
+      'icon': Icons.psychology,
+      'color': Colors.green,
+      'use_hybrid': false,
+      'use_reranking': true,
+      'technical': 'vector + reranking',
+    },
+    'fast': {
+      'name': 'Fast Search',
+      'description': 'Quick results with good accuracy',
+      'icon': Icons.speed,
+      'color': Colors.orange,
+      'use_hybrid': true,
+      'use_reranking': false,
+      'technical': 'hybrid only',
+    },
+    'basic': {
+      'name': 'Basic Search',
+      'description': 'Fastest, finds similar content only',
+      'icon': Icons.search,
+      'color': Colors.purple,
+      'use_hybrid': false,
+      'use_reranking': false,
+      'technical': 'vector only',
+    },
+  };
+
+  // Helper getters
+  String get _currentSearchModeName => _searchModes[_searchMode]!['name'];
+  String get _currentSearchModeDescription =>
+      _searchModes[_searchMode]!['description'];
+  Color get _currentSearchModeColor => _searchModes[_searchMode]!['color'];
+  IconData get _currentSearchModeIcon => _searchModes[_searchMode]!['icon'];
+  bool get _useHybrid => _searchModes[_searchMode]!['use_hybrid'];
+  bool get _enableReranking => _searchModes[_searchMode]!['use_reranking'];
 
   // Predefined search suggestions for industrial refrigeration
   final List<String> _searchSuggestions = [
@@ -214,142 +268,469 @@ class _SearchScreenState extends State<SearchScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Search Manuals',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
+              // Compact Header
+              Row(
+                children: [
+                  Text(
+                    'Search Manuals',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E3A8A),
+                          fontSize: 18,
+                        ),
+                  ),
+                  Spacer(),
+                  // Advanced options toggle
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _showAdvancedOptions = !_showAdvancedOptions;
+                      });
+                      _dismissKeyboard();
+                    },
+                    icon: Icon(
+                      _showAdvancedOptions ? Icons.expand_less : Icons.tune,
                       color: Color(0xFF1E3A8A),
-                      fontSize: 20, // Slightly smaller for mobile
                     ),
+                    tooltip: 'Options',
+                  ),
+                ],
               ),
-              SizedBox(height: 12),
+              SizedBox(height: 8),
 
-              // Search Input Card - More compact
+              // Compact Search Input
               Card(
+                margin: EdgeInsets.zero,
                 child: Padding(
-                  padding: EdgeInsets.all(12),
+                  padding: EdgeInsets.all(8),
                   child: Column(
                     children: [
-                      // Search TextField
-                      TextField(
-                        controller: _searchController,
-                        focusNode: _focusNode,
-                        decoration: InputDecoration(
-                          labelText: 'Search query',
-                          hintText: _voiceAvailable
-                              ? 'e.g., "temperature control" or tap mic to speak'
-                              : 'e.g., "temperature control"',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.search, size: 20),
-                          suffixIcon: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Voice input button
-                              if (_voiceAvailable)
-                                IconButton(
-                                  icon: Icon(
-                                    _isListening ? Icons.mic : Icons.mic_none,
-                                    color:
-                                        _isListening ? Colors.red : Colors.blue,
-                                    size: 20,
-                                  ),
-                                  onPressed: _isListening
-                                      ? _stopVoiceInput
-                                      : _startVoiceInput,
-                                  tooltip: _isListening
-                                      ? 'Stop listening'
-                                      : 'Voice input',
+                      // Search TextField - more compact
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              focusNode: _focusNode,
+                              decoration: InputDecoration(
+                                hintText: 'Search documents...',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                isDense: true,
+                              ),
+                              onSubmitted: (value) {
+                                _performSearch();
+                                _dismissKeyboard();
+                              },
+                              onChanged: (_) => setState(() {}),
+                              textInputAction: TextInputAction.search,
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          // Quick action buttons
+                          Column(
+                            children: [
+                              // Voice button
+                              if (_voiceAvailable)
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  child: IconButton(
+                                    onPressed: _isListening
+                                        ? _stopVoiceInput
+                                        : _startVoiceInput,
+                                    icon: Icon(
+                                      _isListening ? Icons.stop : Icons.mic,
+                                      size: 18,
+                                    ),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: _isListening
+                                          ? Colors.red.shade100
+                                          : Colors.green.shade100,
+                                      foregroundColor: _isListening
+                                          ? Colors.red
+                                          : Colors.green,
+                                    ),
+                                  ),
+                                ),
+                              SizedBox(height: 4),
                               // Clear button
                               if (_searchController.text.isNotEmpty)
-                                IconButton(
-                                  icon: Icon(Icons.clear, size: 20),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() {
-                                      _searchResults = [];
-                                      _lastQuery = null;
-                                    });
-                                  },
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  child: IconButton(
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchResults = [];
+                                        _lastQuery = null;
+                                      });
+                                    },
+                                    icon: Icon(Icons.clear, size: 18),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: Colors.grey.shade100,
+                                      foregroundColor: Colors.grey.shade600,
+                                    ),
+                                  ),
                                 ),
-                              // Keyboard dismiss button
-                              IconButton(
-                                icon: Icon(Icons.keyboard_hide, size: 20),
-                                onPressed: _dismissKeyboard,
-                                tooltip: 'Hide keyboard',
-                              ),
                             ],
                           ),
-                          contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 12),
-                        ),
-                        onSubmitted: (value) {
-                          _performSearch();
-                          _dismissKeyboard();
-                        },
-                        onChanged: (_) => setState(() {}),
-                        textInputAction: TextInputAction.search,
-                        style: TextStyle(fontSize: 14),
+                        ],
                       ),
 
-                      // Voice status indicator
-                      if (_voiceAvailable &&
-                          (_isListening || _voiceError.isNotEmpty)) ...[
+                      SizedBox(height: 8),
+
+                      // Search mode selection + Search Button Row
+                      Row(
+                        children: [
+                          // Search mode selector - user-friendly
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Current mode indicator
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: _currentSearchModeColor
+                                        .withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                        color: _currentSearchModeColor
+                                            .withOpacity(0.3)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(_currentSearchModeIcon,
+                                          size: 12,
+                                          color: _currentSearchModeColor),
+                                      SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          _currentSearchModeName,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: _currentSearchModeColor,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        '(H=${_useHybrid ? 'T' : 'F'} R=${_enableReranking ? 'T' : 'F'})',
+                                        style: TextStyle(
+                                          fontSize: 8,
+                                          color: Colors.grey[600],
+                                          fontFamily: 'monospace',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                // Mode selector dropdown
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    border:
+                                        Border.all(color: Colors.grey.shade300),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _searchMode,
+                                      isDense: true,
+                                      isExpanded: true,
+                                      items: _searchModes.entries.map((entry) {
+                                        final mode = entry.value;
+                                        return DropdownMenuItem(
+                                          value: entry.key,
+                                          child: Row(
+                                            children: [
+                                              Icon(mode['icon'],
+                                                  size: 14,
+                                                  color: mode['color']),
+                                              SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  mode['name'],
+                                                  style:
+                                                      TextStyle(fontSize: 12),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _searchMode = value!;
+                                        });
+                                        _dismissKeyboard();
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          // Search button - compact
+                          ElevatedButton(
+                            onPressed:
+                                _searchController.text.trim().isNotEmpty &&
+                                        !_isSearching
+                                    ? () {
+                                        _performSearch();
+                                        _dismissKeyboard();
+                                      }
+                                    : null,
+                            child: _isSearching
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Icon(Icons.search, size: 18),
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: Size(44, 32),
+                              padding: EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Advanced Options - Collapsible
+                      if (_showAdvancedOptions) ...[
                         SizedBox(height: 8),
                         Container(
                           padding: EdgeInsets.all(8),
                           decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.settings,
+                                      size: 16, color: Colors.grey[600]),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Advanced Options',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  // Global search toggle
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Checkbox(
+                                          value: _allowGlobal,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _allowGlobal = value ?? false;
+                                            });
+                                            _dismissKeyboard();
+                                          },
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        Text(
+                                          'Global Search',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Result limit
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                          color: Colors.grey.shade300),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: DropdownButtonHideUnderline(
+                                      child: DropdownButton<int>(
+                                        value: _resultLimit,
+                                        isDense: true,
+                                        items: [5, 10, 20, 50].map((limit) {
+                                          return DropdownMenuItem(
+                                            value: limit,
+                                            child: Text(
+                                              '$limit',
+                                              style: TextStyle(fontSize: 11),
+                                            ),
+                                          );
+                                        }).toList(),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _resultLimit = value!;
+                                          });
+                                          _dismissKeyboard();
+                                          // Auto-search if there's already a query
+                                          if (_lastQuery != null &&
+                                              _lastQuery!.isNotEmpty) {
+                                            _performSearch();
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              // Search mode explanations with technical details
+                              SizedBox(height: 8),
+                              Container(
+                                padding: EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Search Modes Explained:',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    ..._searchModes.entries.map((entry) {
+                                      final mode = entry.value;
+                                      final isActive = _searchMode == entry.key;
+                                      return Padding(
+                                        padding:
+                                            EdgeInsets.symmetric(vertical: 1),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(
+                                                color: isActive
+                                                    ? mode['color']
+                                                    : Colors.grey.shade300,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            SizedBox(width: 6),
+                                            Expanded(
+                                              child: RichText(
+                                                text: TextSpan(
+                                                  style: TextStyle(
+                                                    fontSize: 9,
+                                                    color: isActive
+                                                        ? mode['color']
+                                                        : Colors.grey[600],
+                                                    fontWeight: isActive
+                                                        ? FontWeight.w500
+                                                        : FontWeight.normal,
+                                                  ),
+                                                  children: [
+                                                    TextSpan(
+                                                      text: '${mode['name']}: ',
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w600),
+                                                    ),
+                                                    TextSpan(
+                                                        text: mode[
+                                                            'description']),
+                                                    TextSpan(
+                                                      text:
+                                                          ' (${mode['technical']})',
+                                                      style: TextStyle(
+                                                        fontSize: 8,
+                                                        fontStyle:
+                                                            FontStyle.italic,
+                                                        color: Colors.grey[500],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // Voice status indicator - only if active
+                      if (_voiceAvailable &&
+                          (_isListening || _voiceError.isNotEmpty)) ...[
+                        SizedBox(height: 8),
+                        Container(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
                             color: _isListening
                                 ? Colors.red.shade50
-                                : _voiceError.isNotEmpty
-                                    ? Colors.red.shade50
-                                    : Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(6),
+                                : Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(4),
                             border: Border.all(
                               color: _isListening
                                   ? Colors.red.shade200
-                                  : _voiceError.isNotEmpty
-                                      ? Colors.red.shade200
-                                      : Colors.blue.shade200,
+                                  : Colors.red.shade200,
                             ),
                           ),
                           child: Row(
                             children: [
                               Icon(
-                                _isListening
-                                    ? Icons.mic
-                                    : _voiceError.isNotEmpty
-                                        ? Icons.error_outline
-                                        : Icons.mic_none,
-                                color: _isListening
-                                    ? Colors.red
-                                    : _voiceError.isNotEmpty
-                                        ? Colors.red
-                                        : Colors.blue,
-                                size: 16,
+                                _isListening ? Icons.mic : Icons.error_outline,
+                                color: _isListening ? Colors.red : Colors.red,
+                                size: 14,
                               ),
-                              SizedBox(width: 6),
+                              SizedBox(width: 4),
                               Expanded(
                                 child: Text(
-                                  _isListening
-                                      ? 'Listening... Speak now'
-                                      : _voiceError.isNotEmpty
-                                          ? _voiceError
-                                          : 'Voice input ready',
+                                  _isListening ? 'Listening...' : _voiceError,
                                   style: TextStyle(
-                                    fontSize: 12,
-                                    color: _isListening
-                                        ? Colors.red.shade700
-                                        : _voiceError.isNotEmpty
-                                            ? Colors.red.shade700
-                                            : Colors.blue.shade700,
+                                    fontSize: 11,
+                                    color: Colors.red.shade700,
                                   ),
                                 ),
                               ),
                               if (_isListening)
                                 Container(
-                                  width: 8,
-                                  height: 8,
+                                  width: 6,
+                                  height: 6,
                                   decoration: BoxDecoration(
                                     color: Colors.red,
                                     shape: BoxShape.circle,
@@ -359,118 +740,14 @@ class _SearchScreenState extends State<SearchScreen> {
                           ),
                         ),
                       ],
-                      SizedBox(height: 12),
-
-                      // Search Controls Row - Responsive
-                      Column(
-                        children: [
-                          // Voice input controls row
-                          if (_voiceAvailable) ...[
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _isListening
-                                    ? _stopVoiceInput
-                                    : _startVoiceInput,
-                                icon: Icon(
-                                  _isListening ? Icons.stop : Icons.mic,
-                                  size: 18,
-                                ),
-                                label: Text(
-                                  _isListening
-                                      ? 'Stop Listening'
-                                      : 'Voice Search',
-                                  style: TextStyle(fontSize: 14),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor:
-                                      _isListening ? Colors.red : Colors.green,
-                                  foregroundColor: Colors.white,
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                ),
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                          ],
-
-                          // Search Button - Full width on mobile
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed:
-                                  _searchController.text.trim().isNotEmpty &&
-                                          !_isSearching
-                                      ? () {
-                                          _performSearch();
-                                          _dismissKeyboard();
-                                        }
-                                      : null,
-                              icon: _isSearching
-                                  ? SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : Icon(Icons.search, size: 18),
-                              label: Text(
-                                _isSearching ? 'Searching...' : 'Search',
-                                style: TextStyle(fontSize: 14),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: 8),
-
-                          // Result Limit - Centered
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey[300]!),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<int>(
-                                value: _resultLimit,
-                                isExpanded: false,
-                                items: [5, 10, 20, 50].map((limit) {
-                                  return DropdownMenuItem(
-                                    value: limit,
-                                    child: Text(
-                                      '$limit results',
-                                      style: TextStyle(fontSize: 13),
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (value) {
-                                  setState(() {
-                                    _resultLimit = value!;
-                                  });
-                                  _dismissKeyboard();
-                                  // Auto-search if there's already a query
-                                  if (_lastQuery != null &&
-                                      _lastQuery!.isNotEmpty) {
-                                    _performSearch();
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
               ),
 
-              SizedBox(height: 12),
+              SizedBox(height: 8),
 
-              // Results Section
+              // Results Section - Takes remaining space
               Expanded(
                 child: _buildResultsSection(),
               ),
@@ -501,175 +778,37 @@ class _SearchScreenState extends State<SearchScreen> {
     return SingleChildScrollView(
       child: Column(
         children: [
-          // Search Tips
+          // Quick Search Suggestions - More compact
           Card(
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.lightbulb_outline, color: Color(0xFF1E3A8A)),
-                      SizedBox(width: 8),
+                      Icon(Icons.lightbulb_outline,
+                          color: Color(0xFF1E3A8A), size: 16),
+                      SizedBox(width: 6),
                       Text(
-                        'Search Tips',
+                        'Quick Search',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF1E3A8A),
+                          fontSize: 14,
                         ),
                       ),
                     ],
-                  ),
-                  SizedBox(height: 12),
-                  _buildTipItem(
-                      'Use specific terms like "temperature sensor" or "compressor oil"'),
-                  _buildTipItem(
-                      'Search for symptoms: "not cooling properly" or "strange noise"'),
-                  _buildTipItem(
-                      'Include model numbers or part names when known'),
-                  _buildTipItem(
-                      'Try different phrasings if you don\'t find what you need'),
-                ],
-              ),
-            ),
-          ),
-
-          SizedBox(height: 16),
-
-          // Quick Search Suggestions
-          Card(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Quick search and voice section
-                  Row(
-                    children: [
-                      Icon(Icons.touch_app, color: Color(0xFF1E3A8A)),
-                      SizedBox(width: 8),
-                      Text(
-                        _voiceAvailable
-                            ? 'Quick Search & Voice'
-                            : 'Quick Search',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E3A8A),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  Text(
-                    _voiceAvailable
-                        ? 'Tap any suggestion to search, or use voice input:'
-                        : 'Tap any suggestion to search:',
-                    style: TextStyle(color: Colors.grey[600]),
                   ),
                   SizedBox(height: 8),
-
-                  // Voice input button (prominent)
-                  if (_voiceAvailable) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed:
-                            _isListening ? _stopVoiceInput : _startVoiceInput,
-                        icon: Icon(
-                          _isListening ? Icons.stop : Icons.mic,
-                          size: 20,
-                        ),
-                        label: Text(
-                          _isListening ? 'Stop Listening' : 'Tap to Speak',
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              _isListening ? Colors.red : Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 12),
-
-                    // Voice status
-                    if (_isListening || _voiceError.isNotEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: _isListening
-                              ? Colors.green.shade50
-                              : Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _isListening
-                                ? Colors.green.shade200
-                                : Colors.red.shade200,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              _isListening ? Icons.mic : Icons.error_outline,
-                              color: _isListening ? Colors.green : Colors.red,
-                              size: 18,
-                            ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _isListening
-                                    ? 'Listening... Speak your search query clearly'
-                                    : _voiceError,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: _isListening
-                                      ? Colors.green.shade700
-                                      : Colors.red.shade700,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            if (_isListening)
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: Colors.green,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-
-                    if (_isListening || _voiceError.isNotEmpty)
-                      SizedBox(height: 12),
-
-                    Text(
-                      'Or tap a suggestion below:',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                  ],
                   Wrap(
                     spacing: 4,
                     runSpacing: 4,
-                    children: _searchSuggestions.map((suggestion) {
+                    children: _searchSuggestions.take(6).map((suggestion) {
                       return ActionChip(
                         label: Text(
                           suggestion,
-                          style: TextStyle(fontSize: 11),
+                          style: TextStyle(fontSize: 10),
                         ),
                         onPressed: () {
                           _searchController.text = suggestion;
@@ -678,7 +817,8 @@ class _SearchScreenState extends State<SearchScreen> {
                         },
                         backgroundColor: Color(0xFF1E3A8A).withOpacity(0.1),
                         labelStyle: TextStyle(color: Color(0xFF1E3A8A)),
-                        padding: EdgeInsets.symmetric(horizontal: 6),
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        visualDensity: VisualDensity.compact,
                       );
                     }).toList(),
                   ),
@@ -686,22 +826,60 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildTipItem(String text) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('• ', style: TextStyle(color: Color(0xFF1E3A8A))),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(color: Colors.grey[700]),
+          SizedBox(height: 12),
+
+          // Search Tips - Compact
+          Card(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline,
+                          color: Color(0xFF1E3A8A), size: 16),
+                      SizedBox(width: 6),
+                      Text(
+                        'Search Tips',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E3A8A),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  ...[
+                    'Use specific terms like "temperature sensor"',
+                    'Search symptoms: "not cooling properly"',
+                    'Include model numbers when known',
+                    'Try different search mode combinations for better results'
+                  ]
+                      .map((tip) => Padding(
+                            padding: EdgeInsets.symmetric(vertical: 1),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('• ',
+                                    style: TextStyle(
+                                        color: Color(0xFF1E3A8A),
+                                        fontSize: 12)),
+                                Expanded(
+                                  child: Text(
+                                    tip,
+                                    style: TextStyle(
+                                        color: Colors.grey[700], fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ))
+                      .toList(),
+                ],
+              ),
             ),
           ),
         ],
@@ -722,7 +900,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
           SizedBox(height: 8),
           Text(
-            'Using AI to find the most relevant information',
+            'Using $_currentSearchModeName',
             style: TextStyle(color: Colors.grey[500], fontSize: 12),
           ),
         ],
@@ -753,6 +931,15 @@ class _SearchScreenState extends State<SearchScreen> {
               style: TextStyle(color: Colors.grey[500]),
               textAlign: TextAlign.center,
             ),
+            SizedBox(height: 8),
+            Text(
+              'using $_currentSearchModeName',
+              style: TextStyle(
+                color: _currentSearchModeColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             SizedBox(height: 16),
             Column(
               mainAxisSize: MainAxisSize.min,
@@ -766,6 +953,8 @@ class _SearchScreenState extends State<SearchScreen> {
                     style: TextStyle(fontSize: 14)),
                 Text('• More general terms', style: TextStyle(fontSize: 14)),
                 Text('• Checking spelling', style: TextStyle(fontSize: 14)),
+                Text('• Try a different search mode',
+                    style: TextStyle(fontSize: 14)),
               ],
             ),
             SizedBox(height: 24),
@@ -790,34 +979,31 @@ class _SearchScreenState extends State<SearchScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Results Header - More compact
+        // Compact Results Header
         Container(
-          width: double.infinity,
-          padding: EdgeInsets.only(bottom: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(
             children: [
-              Text(
-                'Results for',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E3A8A),
-                  fontSize: 13,
+              Icon(
+                _currentSearchModeIcon,
+                size: 14,
+                color: _currentSearchModeColor,
+              ),
+              SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  '"$_lastQuery"',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E3A8A),
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               Text(
-                '"$_lastQuery"',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E3A8A),
-                  fontSize: 13,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              SizedBox(height: 2),
-              Text(
-                '${_searchResults.length} found',
+                '${_searchResults.length} results • ${_currentSearchModeName} (H=${_useHybrid ? 'T' : 'F'} R=${_enableReranking ? 'T' : 'F'})',
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 11,
@@ -827,7 +1013,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
 
-        // Results List
+        // Results List - Takes remaining space
         Expanded(
           child: ListView.builder(
             controller: _scrollController,
@@ -843,90 +1029,40 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildResultCard(Map<String, dynamic> result, int index) {
-    print('Result data: $result');
-    print('Score field: ${result['score']}');
-    print('Score type: ${result['score'].runtimeType}');
-
     final similarity = (result['score'] is String)
         ? double.tryParse(result['score']) ?? 0.0
         : result['score']?.toDouble() ?? 0.0;
 
-    print('Similarity after conversion: $similarity');
-
     final relevanceColor = _getRelevanceColor(similarity);
 
     return Card(
-      margin: EdgeInsets.only(bottom: 8),
+      margin: EdgeInsets.only(bottom: 6),
       child: Padding(
-        padding: EdgeInsets.all(10),
+        padding: EdgeInsets.all(8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Row - Better mobile layout
+            // Header Row - Compact
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        result['document_name'] ?? 'Unknown Document',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: Color(0xFF1E3A8A),
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      SizedBox(height: 4),
-                      // Metadata Row
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          if (result['page_number'] != null)
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.description,
-                                    size: 11, color: Colors.grey[600]),
-                                SizedBox(width: 2),
-                                Text(
-                                  'Page ${result['page_number']}',
-                                  style: TextStyle(
-                                    color: Colors.grey[600],
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.star, size: 11, color: relevanceColor),
-                              SizedBox(width: 2),
-                              Text(
-                                _getRelevanceText(similarity),
-                                style: TextStyle(
-                                  color: relevanceColor,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
+                  child: Text(
+                    result['document_name'] ?? 'Unknown Document',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF1E3A8A),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                SizedBox(width: 8),
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   decoration: BoxDecoration(
                     color: relevanceColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     '${(similarity * 100).toStringAsFixed(0)}%',
@@ -940,30 +1076,34 @@ class _SearchScreenState extends State<SearchScreen> {
               ],
             ),
 
-            SizedBox(height: 8),
+            if (result['page_number'] != null) ...[
+              SizedBox(height: 2),
+              Text(
+                'Page ${result['page_number']}',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 10,
+                ),
+              ),
+            ],
 
-            // Content - Better text wrapping with strict constraints
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return Container(
-                  width: constraints.maxWidth,
-                  child: Text(
-                    result['content'] ?? 'No content available',
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.3,
-                      color: Colors.grey[800],
-                    ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                );
-              },
+            SizedBox(height: 4),
+
+            // Content - Compact
+            Text(
+              result['content'] ?? 'No content available',
+              style: TextStyle(
+                fontSize: 11,
+                height: 1.2,
+                color: Colors.grey[800],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
 
-            SizedBox(height: 6),
+            SizedBox(height: 4),
 
-            // Action Buttons - Compact row
+            // Action Buttons - Compact
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -971,33 +1111,19 @@ class _SearchScreenState extends State<SearchScreen> {
                   onPressed: () => _showFullContent(result),
                   style: TextButton.styleFrom(
                     foregroundColor: Color(0xFF1E3A8A),
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: Size(0, 28),
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    minimumSize: Size(0, 24),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.visibility, size: 12),
-                      SizedBox(width: 4),
-                      Text('View', style: TextStyle(fontSize: 11)),
-                    ],
-                  ),
+                  child: Text('View', style: TextStyle(fontSize: 10)),
                 ),
                 TextButton(
                   onPressed: () => _copyContent(result['content'] ?? ''),
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.grey[700],
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: Size(0, 28),
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    minimumSize: Size(0, 24),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.copy, size: 12),
-                      SizedBox(width: 4),
-                      Text('Copy', style: TextStyle(fontSize: 11)),
-                    ],
-                  ),
+                  child: Text('Copy', style: TextStyle(fontSize: 10)),
                 ),
               ],
             ),
@@ -1030,8 +1156,34 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      final result =
-          await ApiService.searchDocuments(query, limit: _resultLimit);
+      print('🔍 SEARCH API CALL:');
+      print('   Query: "$query"');
+      print('   use_hybrid: $_useHybrid');
+      print('   use_reranking: $_enableReranking');
+      print('   allow_global: $_allowGlobal');
+      print('   limit: $_resultLimit');
+      print('   Search Mode: $_currentSearchModeName');
+
+      final result = await ApiService.searchDocuments(
+        query,
+        limit: _resultLimit,
+        useHybrid: _useHybrid,
+        enableReranking: _enableReranking,
+        allowGlobal: _allowGlobal,
+      );
+
+      print('📥 API RESPONSE:');
+      print('   Success: ${result['success']}');
+      if (result['success'] && result['data'] != null) {
+        final results = result['data']['results'] ?? [];
+        print('   Results count: ${results.length}');
+        if (results.isNotEmpty) {
+          print('   First result score: ${results[0]['score']}');
+          print('   First result doc: ${results[0]['document_name']}');
+        }
+      } else {
+        print('   Error: ${result['error']}');
+      }
 
       setState(() {
         _isSearching = false;

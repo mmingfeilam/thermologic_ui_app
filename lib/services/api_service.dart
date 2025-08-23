@@ -54,29 +54,105 @@ class ApiService {
     }
   }
 
-  // Search documents (company-aware)
-  static Future<Map<String, dynamic>> searchDocuments(String query,
-      {int limit = 10}) async {
+  // Enhanced search documents with correct API parameters
+  static Future<Map<String, dynamic>> searchDocuments(
+    String query, {
+    int limit = 10,
+    bool useHybrid = true,
+    bool enableReranking = true,
+    bool allowGlobal = false,
+  }) async {
     try {
-      // Use company-aware search endpoint
-      final uri = Uri.parse(
-              '$baseUrl/api/v1/companies/$currentCompanyId/documents/search')
-          .replace(
-        queryParameters: {
-          'query': query,
-          'limit': limit.toString(),
-        },
+      // Prepare query parameters
+      final queryParameters = <String, String>{
+        'query': query,
+        'limit': limit.toString(),
+        'use_hybrid': useHybrid.toString(),
+        'use_reranking': enableReranking.toString(),
+      };
+
+      // Add global search parameter
+      if (allowGlobal) {
+        queryParameters['allow_global'] = 'true';
+      }
+
+      // Build the URI
+      Uri uri;
+      if (allowGlobal) {
+        // Use global search endpoint when allow_global is true
+        uri = Uri.parse('$baseUrl/api/v1/search').replace(
+          queryParameters: queryParameters,
+        );
+      } else {
+        // Use company-aware search endpoint
+        uri = Uri.parse(
+                '$baseUrl/api/v1/companies/$currentCompanyId/documents/search')
+            .replace(
+          queryParameters: queryParameters,
+        );
+      }
+
+      print('🌐 API CALL DETAILS:');
+      print('   Final URI: $uri');
+      print('   Method: POST');
+      print('   Headers: ${_getHeaders()}');
+      print('   Parameters breakdown:');
+      queryParameters.forEach((key, value) {
+        print('     $key: $value');
+      });
+
+      final response = await http.post(
+        uri,
+        headers: _getHeaders(),
       );
 
-      final response = await http.post(uri);
+      print('📡 API RESPONSE DETAILS:');
+      print('   Status Code: ${response.statusCode}');
+      print('   Response Body: ${response.body}');
+      print('   Response Length: ${response.body.length} chars');
+      if (response.statusCode != 200) {
+        print('   Error Response Body: ${response.body}');
+      } else {
+        try {
+          final decoded = json.decode(response.body);
+          if (decoded is Map && decoded.containsKey('results')) {
+            print(
+                '   Results Array Length: ${(decoded['results'] as List).length}');
+          }
+        } catch (e) {
+          print('   Could not parse response for logging: $e');
+        }
+      }
+
+      final decoded = json.decode(response.body);
+
+      // ✅ Force sort by similarity_score descending
+      if (decoded is Map && decoded.containsKey('results')) {
+        List results = decoded['results'];
+
+        results.sort((a, b) {
+          final aScore = (a['similarity_score'] ?? 0) as num;
+          final bScore = (b['similarity_score'] ?? 0) as num;
+          return bScore.compareTo(aScore); // descending
+        });
+
+        decoded['results'] = results;
+      }
 
       return {
         'success': response.statusCode == 200,
-        'data': json.decode(response.body),
+        'data': decoded,
       };
     } catch (e) {
+      print('Search error: $e');
       return {'success': false, 'error': e.toString()};
     }
+  }
+
+  // Legacy search method for backward compatibility
+  static Future<Map<String, dynamic>> searchDocumentsLegacy(String query,
+      {int limit = 10}) async {
+    return searchDocuments(query, limit: limit);
   }
 
   // Get all documents (company-aware)
@@ -195,5 +271,46 @@ class ApiService {
     } catch (e) {
       throw Exception('Status check error: $e');
     }
+  }
+
+  // New method to get search mode combinations information
+  static Map<String, Map<String, dynamic>> getSearchModeCombinations() {
+    return {
+      'hybrid_reranked': {
+        'name': 'Hybrid + Reranking',
+        'description':
+            'Vector + keyword search with reranking - best overall quality',
+        'recommended_for': 'Most queries, balanced relevance',
+        'use_hybrid': true,
+        'use_reranking': true,
+      },
+      'vector_reranked': {
+        'name': 'Vector + Reranking',
+        'description': 'Pure semantic search with reranking',
+        'recommended_for': 'Conceptual queries where exact words don\'t matter',
+        'use_hybrid': false,
+        'use_reranking': true,
+      },
+      'hybrid_only': {
+        'name': 'Hybrid Only',
+        'description': 'Vector + keyword search without reranking',
+        'recommended_for': 'Fast results when reranking speed not needed',
+        'use_hybrid': true,
+        'use_reranking': false,
+      },
+      'vector_only': {
+        'name': 'Vector Only',
+        'description': 'Pure semantic search without reranking',
+        'recommended_for': 'Fastest option, semantic similarity only',
+        'use_hybrid': false,
+        'use_reranking': false,
+      },
+    };
+  }
+
+  // Method to validate search parameters
+  static bool isValidSearchConfiguration(bool useHybrid, bool useReranking) {
+    // All combinations are valid
+    return true;
   }
 }
