@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/api_service.dart';
+import '../services/search_highlighter_service.dart';
 
 // Re-enable voice service
 import '../services/voice_service.dart' as voice;
@@ -1034,101 +1035,376 @@ class _SearchScreenState extends State<SearchScreen> {
         : result['score']?.toDouble() ?? 0.0;
 
     final relevanceColor = _getRelevanceColor(similarity);
+    final content = result['content'] ?? 'No content available';
+    final documentName = result['document_name'] ?? 'Unknown Document';
+
+    // Extract query terms and create smart snippet using SearchHighlighterService
+    final queryTerms =
+        SearchHighlighterService.extractQueryTerms(_lastQuery ?? '');
+    final smartSnippet = SearchHighlighterService.extractSmartSnippet(
+      content,
+      queryTerms,
+      maxLength: 150,
+    );
+
+    // Get match statistics
+    final matchStats =
+        SearchHighlighterService.getMatchStats(content, queryTerms);
 
     return Card(
       margin: EdgeInsets.only(bottom: 6),
-      child: Padding(
-        padding: EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Row - Compact
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    result['document_name'] ?? 'Unknown Document',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: Color(0xFF1E3A8A),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: relevanceColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    '${(similarity * 100).toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: relevanceColor,
+      elevation: 2,
+      child: InkWell(
+        onTap: () => _showFullContent(result),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header with highlighted document name
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: RichText(
+                      text: SearchHighlighterService.highlightText(
+                        documentName,
+                        queryTerms,
+                        theme: 'subtle',
+                        baseStyle: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: Color(0xFF1E3A8A),
+                        ),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-              ],
-            ),
+                  SizedBox(width: 8),
+                  _buildRelevanceChip(similarity, relevanceColor),
+                ],
+              ),
 
-            if (result['page_number'] != null) ...[
-              SizedBox(height: 2),
-              Text(
-                'Page ${result['page_number']}',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 10,
+              // Metadata row
+              if (result['page_number'] != null ||
+                  matchStats['totalMatches'] > 0) ...[
+                SizedBox(height: 4),
+                _buildMetadataRow(result, matchStats),
+              ],
+
+              SizedBox(height: 6),
+
+              // Highlighted content snippet
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: RichText(
+                  text: SearchHighlighterService.highlightText(
+                    smartSnippet,
+                    queryTerms,
+                    theme: 'default',
+                    baseStyle: TextStyle(
+                      fontSize: 11,
+                      height: 1.3,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+
+              SizedBox(height: 6),
+
+              // Action row
+              _buildActionRow(result, matchStats),
             ],
+          ),
+        ),
+      ),
+    );
+  }
 
-            SizedBox(height: 4),
-
-            // Content - Compact
-            Text(
-              result['content'] ?? 'No content available',
-              style: TextStyle(
-                fontSize: 11,
-                height: 1.2,
-                color: Colors.grey[800],
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+  // Helper method for relevance chip
+  Widget _buildRelevanceChip(double similarity, Color relevanceColor) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: relevanceColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: relevanceColor.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.star, size: 10, color: relevanceColor),
+          SizedBox(width: 2),
+          Text(
+            '${(similarity * 100).toStringAsFixed(0)}%',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: relevanceColor,
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            SizedBox(height: 4),
+  // Helper method for metadata row
+  Widget _buildMetadataRow(
+      Map<String, dynamic> result, Map<String, dynamic> matchStats) {
+    return Row(
+      children: [
+        if (result['page_number'] != null) ...[
+          Icon(Icons.description, size: 10, color: Colors.grey[600]),
+          SizedBox(width: 2),
+          Text(
+            'Page ${result['page_number']}',
+            style: TextStyle(color: Colors.grey[600], fontSize: 10),
+          ),
+        ],
+        if (result['page_number'] != null && matchStats['totalMatches'] > 0)
+          Text(' • ', style: TextStyle(color: Colors.grey[400], fontSize: 10)),
+        if (matchStats['totalMatches'] > 0) ...[
+          Icon(Icons.search, size: 10, color: Colors.blue[600]),
+          SizedBox(width: 2),
+          Text(
+            '${matchStats['totalMatches']} match${matchStats['totalMatches'] > 1 ? 'es' : ''}',
+            style: TextStyle(
+              color: Colors.blue[600],
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 
-            // Action Buttons - Compact
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => _showFullContent(result),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Color(0xFF1E3A8A),
-                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    minimumSize: Size(0, 24),
-                  ),
-                  child: Text('View', style: TextStyle(fontSize: 10)),
-                ),
-                TextButton(
-                  onPressed: () => _copyContent(result['content'] ?? ''),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.grey[700],
-                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    minimumSize: Size(0, 24),
-                  ),
-                  child: Text('Copy', style: TextStyle(fontSize: 10)),
-                ),
-              ],
+  // Helper method for action row
+  Widget _buildActionRow(
+      Map<String, dynamic> result, Map<String, dynamic> matchStats) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Match indicator chip
+        if (matchStats['matchedTerms'].length > 0)
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green.shade200),
+            ),
+            child: Text(
+              '${matchStats['matchedTerms'].length}/${SearchHighlighterService.extractQueryTerms(_lastQuery ?? '').length} terms',
+              style: TextStyle(
+                fontSize: 9,
+                color: Colors.green.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+
+        // Action buttons
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton.icon(
+              onPressed: () => _showFullContent(result),
+              icon: Icon(Icons.visibility, size: 12),
+              label: Text('View', style: TextStyle(fontSize: 10)),
+              style: TextButton.styleFrom(
+                foregroundColor: Color(0xFF1E3A8A),
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size(0, 28),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _copyContent(result['content'] ?? ''),
+              icon: Icon(Icons.copy, size: 12),
+              label: Text('Copy', style: TextStyle(fontSize: 10)),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey[700],
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size(0, 28),
+              ),
             ),
           ],
         ),
+      ],
+    );
+  }
+
+  // Enhanced full content dialog
+  void _showFullContent(Map<String, dynamic> result) {
+    final queryTerms =
+        SearchHighlighterService.extractQueryTerms(_lastQuery ?? '');
+    final content = result['content'] ?? 'No content available';
+    final documentName = result['document_name'] ?? 'Document Content';
+    final matchStats =
+        SearchHighlighterService.getMatchStats(content, queryTerms);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(documentName,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: Container(
+          width: double.maxFinite,
+          constraints: BoxConstraints(maxHeight: 400),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Enhanced metadata section
+                _buildFullContentMetadata(result, matchStats),
+                SizedBox(height: 12),
+
+                // Full content with highlighting - using fallback if highlighting fails
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: queryTerms.isNotEmpty
+                      ? SelectableText.rich(
+                          _buildHighlightedTextSpan(content, queryTerms),
+                        )
+                      : SelectableText(
+                          content,
+                          style: TextStyle(height: 1.4, fontSize: 13),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () => _copyContent(content),
+            icon: Icon(Icons.copy, size: 16),
+            label: Text('Copy All'),
+          ),
+          TextButton.icon(
+            onPressed: () => Navigator.pop(context),
+            icon: Icon(Icons.close, size: 16),
+            label: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Fallback highlighting method to ensure content is always shown
+  TextSpan _buildHighlightedTextSpan(String content, List<String> queryTerms) {
+    try {
+      return SearchHighlighterService.highlightText(
+        content,
+        queryTerms,
+        theme: 'default',
+        baseStyle: TextStyle(height: 1.4, fontSize: 13),
+      );
+    } catch (e) {
+      // Fallback to simple highlighting if service fails
+      return _simpleHighlight(content, queryTerms);
+    }
+  }
+
+  // Simple fallback highlighting
+  TextSpan _simpleHighlight(String content, List<String> queryTerms) {
+    if (queryTerms.isEmpty || content.isEmpty) {
+      return TextSpan(
+          text: content, style: TextStyle(height: 1.4, fontSize: 13));
+    }
+
+    List<TextSpan> spans = [];
+    String remainingContent = content;
+    int currentIndex = 0;
+
+    // Create simple regex for highlighting
+    String pattern = queryTerms.map((term) => RegExp.escape(term)).join('|');
+    RegExp regex = RegExp('($pattern)', caseSensitive: false);
+
+    for (Match match in regex.allMatches(content)) {
+      // Add text before the match
+      if (match.start > currentIndex) {
+        spans.add(TextSpan(
+          text: content.substring(currentIndex, match.start),
+          style: TextStyle(height: 1.4, fontSize: 13),
+        ));
+      }
+
+      // Add the highlighted match
+      spans.add(TextSpan(
+        text: match.group(0)!,
+        style: TextStyle(
+          backgroundColor: Colors.yellow.shade200,
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
+          height: 1.4,
+          fontSize: 13,
+        ),
+      ));
+
+      currentIndex = match.end;
+    }
+
+    // Add remaining text after the last match
+    if (currentIndex < content.length) {
+      spans.add(TextSpan(
+        text: content.substring(currentIndex),
+        style: TextStyle(height: 1.4, fontSize: 13),
+      ));
+    }
+
+    return TextSpan(children: spans);
+  }
+
+  // Helper for full content metadata
+  Widget _buildFullContentMetadata(
+      Map<String, dynamic> result, Map<String, dynamic> matchStats) {
+    return Container(
+      padding: EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          if (result['page_number'] != null) ...[
+            Icon(Icons.description, size: 16, color: Colors.grey[600]),
+            SizedBox(width: 4),
+            Text(
+              'Page ${result['page_number']}',
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
+            Text(' • ', style: TextStyle(color: Colors.grey[400])),
+          ],
+          Icon(Icons.highlight_alt, size: 16, color: Colors.blue[600]),
+          SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              '${matchStats['totalMatches']} matches found in ${matchStats['matchedTerms'].length} different terms',
+              style: TextStyle(
+                color: Colors.blue[600],
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1172,7 +1448,7 @@ class _SearchScreenState extends State<SearchScreen> {
         allowGlobal: _allowGlobal,
       );
 
-      print('📥 API RESPONSE:');
+      print('🔥 API RESPONSE:');
       print('   Success: ${result['success']}');
       if (result['success'] && result['data'] != null) {
         final results = result['data']['results'] ?? [];
@@ -1210,53 +1486,6 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
       );
     }
-  }
-
-  void _showFullContent(Map<String, dynamic> result) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          result['document_name'] ?? 'Document Content',
-          style: TextStyle(fontSize: 16),
-        ),
-        content: Container(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (result['page_number'] != null) ...[
-                  Text(
-                    'Page ${result['page_number']}',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12,
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                ],
-                Text(
-                  result['content'] ?? 'No content available',
-                  style: TextStyle(height: 1.4),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => _copyContent(result['content'] ?? ''),
-            child: Text('Copy'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _copyContent(String content) async {
