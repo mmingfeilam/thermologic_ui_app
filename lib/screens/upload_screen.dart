@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:async';
 import '../services/api_service.dart';
 import '../services/file_picker_service.dart';
 
@@ -16,11 +17,17 @@ class _UploadScreenState extends State<UploadScreen> {
   File? _selectedFile;
   FileInfo? _selectedFileInfo;
   bool _isUploading = false;
+  bool _isProcessing = false;
   String? _uploadResult;
   double _uploadProgress = 0.0;
 
+  // Status polling
+  Timer? _statusTimer;
+  String? _currentDocumentId;
+
   @override
   void dispose() {
+    _statusTimer?.cancel();
     _userIdController.dispose();
     super.dispose();
   }
@@ -165,6 +172,54 @@ class _UploadScreenState extends State<UploadScreen> {
                     SizedBox(height: 16),
                   ],
 
+                  // Processing Status
+                  if (_isProcessing && !_isUploading) ...[
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue[200]!),
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF1E3A8A)),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Processing document...',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF1E3A8A),
+                                  ),
+                                ),
+                                Text(
+                                  'Advanced OCR extraction in progress (1-2 minutes)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                  ],
+
                   // Upload Button
                   SizedBox(
                     width: double.infinity,
@@ -214,20 +269,27 @@ class _UploadScreenState extends State<UploadScreen> {
               color: _uploadResult!.toLowerCase().contains('error') ||
                       _uploadResult!.toLowerCase().contains('failed')
                   ? Colors.red[50]
-                  : Colors.green[50],
+                  : _uploadResult!.toLowerCase().contains('complete')
+                      ? Colors.green[50]
+                      : Colors.blue[50],
               child: Padding(
                 padding: EdgeInsets.all(16),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
                       _uploadResult!.toLowerCase().contains('error') ||
                               _uploadResult!.toLowerCase().contains('failed')
                           ? Icons.error
-                          : Icons.check_circle,
+                          : _uploadResult!.toLowerCase().contains('complete')
+                              ? Icons.check_circle
+                              : Icons.info,
                       color: _uploadResult!.toLowerCase().contains('error') ||
                               _uploadResult!.toLowerCase().contains('failed')
                           ? Colors.red
-                          : Colors.green,
+                          : _uploadResult!.toLowerCase().contains('complete')
+                              ? Colors.green
+                              : Colors.blue,
                     ),
                     SizedBox(width: 12),
                     Expanded(
@@ -240,7 +302,11 @@ class _UploadScreenState extends State<UploadScreen> {
                                           .toLowerCase()
                                           .contains('failed')
                                   ? Colors.red[700]
-                                  : Colors.green[700],
+                                  : _uploadResult!
+                                          .toLowerCase()
+                                          .contains('complete')
+                                      ? Colors.green[700]
+                                      : Colors.blue[700],
                         ),
                       ),
                     ),
@@ -290,7 +356,9 @@ class _UploadScreenState extends State<UploadScreen> {
         SizedBox(height: 8),
         _buildInfoItem(Icons.auto_awesome, 'AI-powered text extraction'),
         _buildInfoItem(Icons.search, 'Automatic semantic indexing'),
-        _buildInfoItem(Icons.speed, 'Real-time processing status'),
+        _buildInfoItem(
+            Icons.hourglass_empty, 'Background processing (1-2 minutes)'),
+        _buildInfoItem(Icons.notifications_active, 'Real-time status updates'),
       ],
     );
   }
@@ -336,6 +404,7 @@ class _UploadScreenState extends State<UploadScreen> {
           _selectedFileInfo = fileInfo;
           _uploadResult = null;
           _uploadProgress = 0.0;
+          _isProcessing = false;
         });
       }
     } catch (e) {
@@ -346,11 +415,62 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 
   void _clearSelection() {
+    _statusTimer?.cancel();
     setState(() {
       _selectedFile = null;
       _selectedFileInfo = null;
       _uploadResult = null;
       _uploadProgress = 0.0;
+      _isProcessing = false;
+      _currentDocumentId = null;
+    });
+  }
+
+  void _startStatusPolling(String documentId) {
+    _currentDocumentId = documentId;
+    _statusTimer?.cancel();
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    _statusTimer = Timer.periodic(Duration(seconds: 5), (timer) async {
+      try {
+        final status = await ApiService.getDocumentStatus(documentId);
+
+        if (status['processing_status'] == 'completed') {
+          setState(() {
+            _isProcessing = false;
+            _uploadResult = 'Processing complete! Document is now searchable.\n'
+                'Chunks created: ${status['chunk_count']}\n'
+                'Quality score: ${(status['text_quality_score'] ?? 0.0).toStringAsFixed(2)}';
+          });
+          timer.cancel();
+
+          // Show completion notification
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Document processing completed! Ready for search.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        } else if (status['processing_status'] == 'failed') {
+          setState(() {
+            _isProcessing = false;
+            _uploadResult = 'Processing failed. Please try uploading again.';
+          });
+          timer.cancel();
+        }
+        // If still processing, keep polling
+      } catch (e) {
+        // If error checking status, stop polling but don't show error
+        // (processing might still be happening)
+        timer.cancel();
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     });
   }
 
@@ -366,6 +486,7 @@ class _UploadScreenState extends State<UploadScreen> {
       _isUploading = true;
       _uploadResult = null;
       _uploadProgress = 0.0;
+      _isProcessing = false;
     });
 
     try {
@@ -389,12 +510,19 @@ class _UploadScreenState extends State<UploadScreen> {
         _uploadProgress = 1.0;
 
         if (result['success']) {
-          final docId = result['data']['document_id'];
+          final docId = result['data']['document_id'].toString();
+          final status = result['data']['status'] ?? 'processing';
+
           _uploadResult = 'Upload successful! Document ID: $docId\n'
-              'Your manual is being processed and will be available for search shortly.';
+              'Status: $status\n'
+              'Your manual is being processed in the background and will be searchable when complete.';
+
           _selectedFile = null;
           _selectedFileInfo = null;
           _uploadProgress = 0.0;
+
+          // Start status polling
+          _startStatusPolling(docId);
         } else {
           _uploadResult =
               'Upload failed: ${result['error'] ?? 'Unknown error'}';
@@ -405,14 +533,14 @@ class _UploadScreenState extends State<UploadScreen> {
       if (result['success']) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Document uploaded successfully!'),
+            content: Text(
+                'Document uploaded successfully! Processing in background...'),
             backgroundColor: Colors.green,
             action: SnackBarAction(
               label: 'View Documents',
               textColor: Colors.white,
               onPressed: () {
-                // Navigate to documents tab - we'll need to handle this differently
-                // For now, just show a message
+                // Navigate to documents tab - you'll need to implement tab switching
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Go to Documents tab to view uploaded files'),
@@ -428,6 +556,7 @@ class _UploadScreenState extends State<UploadScreen> {
         _isUploading = false;
         _uploadProgress = 0.0;
         _uploadResult = 'Upload error: $e';
+        _isProcessing = false;
       });
     }
   }
